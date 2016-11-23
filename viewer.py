@@ -39,11 +39,9 @@ def main(argv):
     if args.file is None:
         video = cv2.VideoCapture(0)
     else:
-        try:
-            video = cv2.VideoCapture(args.file)
-        except:
-            print('Error reading file {} '
-                  '(is it an image or video?)'.format(args.file))
+        video = cv2.VideoCapture(args.file)
+        if not video.isOpened():
+            print('Could not read file {}'.format(args.file))
             sys.exit(-1)
 
     if args.file is not None:
