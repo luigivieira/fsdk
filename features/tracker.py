@@ -27,6 +27,7 @@
 
 import os
 import dlib
+import cv2
 
 __modulePath = os.path.dirname(os.path.abspath(__file__))
 """Path of this module, required to load the face model."""
@@ -83,23 +84,36 @@ def facialLandmarks(image, numFaces = None):
     if __detector is None or __predictor is None:
         initialize()
     
-    # Detect faces in the image, getting the bounding boxes
+    rows = image.shape[0]
+    cols = image.shape[1]
+    
+    # Resize the image to a quarter of its original size
+    # in order to improve performance in the face detection
+    downRatio = 4
+    smallImage = cv2.resize(image, (0, 0), fx=1/downRatio, fy=1/downRatio)
+    
+    # Detect faces in the smaller image, getting the bounding boxes
     # of each face
-    detectedFaces = __detector(image, 1)
+    detectedFaces = __detector(smallImage, 1)
 
     # Iterate through the detected faces to find the landmark
     # positions and recalculate their face regions (bounding boxes)
     cnt = 0
     faces = []
     for number, region in enumerate(detectedFaces):
+        
+        # Scale back the detected region, so the landmarks
+        # can be proper located on the full resolution image
+        region = dlib.rectangle(region.left() * downRatio,
+                                region.top() * downRatio,
+                                region.right() * downRatio,
+                                region.bottom() * downRatio)
+    
         # Fit the shape model over the face region to 
         # predict the positions of facial landmarks
         faceShape = __predictor(image, region)
 
         # Build the face dictionary and recalculate its bounding box
-        rows = image.shape[0]
-        cols = image.shape[1]
-        
         minX = cols
         minY = rows
         maxX = 0

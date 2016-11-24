@@ -31,8 +31,21 @@ import numpy as np
 import cv2
 from features.tracker import facialLandmarks
 
+#---------------------------------------------
 def main(argv):
-
+    """
+    Main entry point of this utility application.
+    
+    This is simply a function called by the checking of namespace __main__, at
+    the end of this script (in order to execute only when this script is ran
+    directly).
+    
+    Parameters
+    ------
+    argv: list of str
+        Arguments received from the command line.    
+    """
+    
     # Parse the command line
     args = parseCommandLine(argv)
 
@@ -77,13 +90,32 @@ def main(argv):
 
         cv2.imshow('Viewer', frame)
 
-        if cv2.waitKey(delay) & 0xFF == ord('q'):
+        if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
     video.release()
 
 #---------------------------------------------
 def parseCommandLine(argv):
+    """
+    Parse the command line of this utility application.
+    
+    This function uses the argparse package to handle the command line
+    arguments. In case of command line errors, the application will be
+    automatically terminated.
+    
+    Parameters
+    ------
+    argv: list of str
+        Arguments received from the command line.
+        
+    Returns
+    ------
+    object
+        Object with the parsed arguments as attributes (refer to the
+        documentation of the argparse package for details)
+    
+    """
     parser = argparse.ArgumentParser(
                         description='Display a video with the tracking of '
                                     'facial landmarks.')
@@ -94,12 +126,9 @@ def parseCommandLine(argv):
                        )
     
     return parser.parse_args()
-
-#---------------------------------------------    
-def showHelp():
-    print('{} [file]'.format(__name__))
     
-    
+#---------------------------------------------
 # namespace verification for invoking main
+#---------------------------------------------
 if __name__ == '__main__':
     main(sys.argv[1:])
