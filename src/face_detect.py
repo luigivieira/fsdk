@@ -32,15 +32,8 @@ import argparse
 import numpy as np
 import cv2
 from features.tracker import facialLandmarks
-from progress import printProgress
-
-__imageExts = ['.bmp', '.dib', '.pbm', '.pgm', '.ppm', '.sr', '.ras',
-               '.jpeg', '.jpg', '.jpe', '.jp2', '.tiff', '.tif', '.png']
-"""
-File extensions of images, according to the supported formats described in
-[OpenCV's documentation](http://docs.opencv.org/2.4/modules/highgui/doc/
-reading_and_writing_images_and_video.html?highlight=imread#imread)
-"""
+from util.media import getMediaType, MediaType
+from util.progress import printProgress
 
 #---------------------------------------------
 def main(argv):
@@ -61,8 +54,7 @@ def main(argv):
     args = parseCommandLine(argv)
 
     # Process the image or video file
-    name, ext = os.path.splitext(args.inputFile)
-    if ext.lower() in __imageExts:
+    if getMediaType(args.inputFile) is MediaType.Image:
         processImage(args.inputFile, args.outputFile)
     else:
         processVideo(args.inputFile, args.outputFile)
@@ -89,38 +81,80 @@ def parseCommandLine(argv):
     
     """
     parser = argparse.ArgumentParser(
-                        description='Detects facial landmarks in a video or '
-                        'image and saves their positions to a CSV file.')
+                        description='Extracts facial landmarks from a video or '
+                        'image, saving their positions to a CSV file.')
     parser.add_argument('inputFile',
-                        help='Image or video file to use for the extraction of '
-                        'facial landmarks.')
+                        help='Image or video file to use for the extraction.')
     parser.add_argument('outputFile',
                         help='CSV file to create with the facial landmarks '
-                        'extracted from inputFile.')
+                        'extracted. If the file exists, it is overwritten when '
+                        'video files are processed or appended when image files'
+                        ' are processed.')
     
     return parser.parse_args()
     
 #---------------------------------------------
-def processImage(imageFile, csvFile):
+def processImage(imageFilename, csvFilename):
     """
     Extracts facial landmarks from an image file.
     
     This function will read the given image, detect a face and its facial
     landmarks in that image, and then save the face region and landmarks
     positions in the given CSV file. The CSV file will contain only one line of
-    data, in the format: 'region.left, region.top, region.right, region.bottom,
-    x1, y1, x2, y2, x3, y3, ..., x67, y67'.
+    data, in the format: `face.left, face.top, face.right, face.bottom, 
+    mark00.x, mark00.y, mark01.x, mark01.y, mark03.x, mark03.y, ..., mark67.x, 
+    mark67.y`.
     
     Parameters
     ------
-    imageFile: str
+    imageFilename: str
         Path and name of the image file to read.
-    csvFile: str
+    csvFilename: str
         Path and name of the CSV file to create with the positions of the
         landmarks.
     """
     
+    # Open the image for reading
+    imageFile = cv2.imread(imageFilename, 0)
+    if imageFile is None:
+        print('Could not read the image file {}'.format(imageFilename))
+        sys.exit(-1)
     
+    # Process the image, tracking only one face
+    faces = facialLandmarks(imageFile, 1)
+
+    # Check if the face was detected
+    if len(faces) == 0:
+        print('No faces detected on image {}'.format(imageFilename))
+        return
+
+    # Open the CSV for writting
+    try:
+        csvFile = open(csvFilename, 'w', newline='')
+    except IOError as e:
+        print('Could not write to the CSV file {}'.format(csvFilename))
+        sys.exit(-2)
+        
+    csvWriter = csv.writer(csvFile, delimiter=',', quotechar='"',
+                           quoting=csv.QUOTE_MINIMAL)
+        
+    # Write the CSV header
+    header = ['face.left', 'face.top', 'face.right', 'face.bottom']
+    for i in range(68):
+        header.append('mark{:02d}.x'.format(i))
+        header.append('mark{:02d}.y'.format(i))
+    csvWriter.writerow(header)
+        
+    # Write the landmarks data to the CSV
+    face = faces[0]
+    faceRegion = face['region']
+    row = [faceRegion[0], faceRegion[1], faceRegion[2], faceRegion[3]]
+    for point in face['landmarks']:
+        row.append(point[0])
+        row.append(point[1])
+    csvWriter.writerow(row)
+    
+    csvFile.close()
 
 #---------------------------------------------
 def processVideo(videoFilename, csvFilename):
@@ -130,8 +164,9 @@ def processVideo(videoFilename, csvFilename):
     This function will read the given video, detect a face and its facial
     landmarks in each frame of that video, and then save the face regions and
     landmarks positions in the given CSV file. The CSV file will contain one
-    line of data per frame, in the format: 'frame.number, region.left, region.
-    top, region.right, region.bottom, x1, y1, x2, y2, x3, y3, ..., x67, y67'.
+    line of data per frame, in the format: `frame.number, face.left, face.top,
+    face.right, face.bottom, mark00.x, mark00.y, mark01.x, mark01.y, mark03.x,
+    mark03.y, ..., mark67.x, mark67.y`.
     
     Parameters
     ------

@@ -28,6 +28,40 @@
 import sys
 
 #---------------------------------------------
+def getChar():
+    """
+    Read one single character from stdin without echoing and without requiring
+    the pressing of ENTER.
+    
+    This code is based on [this answer from StackOverflow](http://stackoverflow.
+    com/a/36974338/2896619).
+    
+    Returns
+    ------
+    char: str
+        Single character read from stdin.
+    """
+    try:
+        # for Windows-based systems
+        import msvcrt # If successful, we are on Windows
+        return msvcrt.getch()
+
+    except ImportError:
+        # for POSIX-based systems (with termios & tty support)
+        import tty, sys, termios
+
+        fd = sys.stdin.fileno()
+        oldSettings = termios.tcgetattr(fd)
+
+        try:
+            tty.setraw(fd)
+            answer = sys.stdin.read(1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, oldSettings)
+
+        return answer
+
+#---------------------------------------------
 def printProgress(iteration, total, prefix = '', suffix = '', decimals = 2,
                   barLength = 80):
     """
