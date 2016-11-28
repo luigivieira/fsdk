@@ -474,7 +474,7 @@ class FaceDataSet:
         return True if len(self.faces) == 0 else False
         
     #---------------------------------------------
-    def save(self, filename):
+    def save(self, filename, confirmOverwrite = None):
         """
         Saves the face data set to the given CSV file.
         
@@ -532,7 +532,6 @@ class FaceDataSet:
         header = ['frame.number', 'face.left', 'face.top', 'face.right',
                   'face.bottom']
         for i in range(68):
-            point = self.points[i]
             header.append('mark{:02d}.x'.format(i))
             header.append('mark{:02d}.y'.format(i))
         writer.writerow(header)

@@ -71,7 +71,7 @@ def main(argv):
             face.detect(image)
             if face.isEmpty():
                 print('No faces were detected in the image {}'
-                        .format(args.imageFilename))
+                        .format(args.mediaFilename))
                 exit(-3)
             
         # Draw the face on the image
