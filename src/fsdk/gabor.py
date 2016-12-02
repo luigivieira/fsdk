@@ -163,7 +163,7 @@ class GaborBank:
         numO = len(self._orientations)
 
         fig, axarr = plt.subplots(numW, numO)
-        plt.gray()
+
         
         # This is the dimension of each kernel image representation
         rows = 64
@@ -172,22 +172,31 @@ class GaborBank:
         for w, wavelength in zip(range(numW), self._wavelengths):
             for o, orientation in zip(range(numO), self._orientations):
                 par = KernelParams(wavelength, orientation)
-                k = self._bank[par]
+                k = self._bank[par].real
                 
                 img = np.zeros((rows, cols), np.float)
 
                 y = int(img.shape[0] / 2 - k.shape[0] / 2)
                 x = int(img.shape[1] / 2 - k.shape[1] / 2)
 
-                img[x:x + k.shape[1], y:y + k.shape[0]] = k.real
+                img[x:x + k.shape[1], y:y + k.shape[0]] = k
 
-                axarr[w, o].imshow(img) #, interpolation="none")                
+                axarr[w, o].imshow(img, cmap='gray', vmin=-0.01, vmax=0.01)#, interpolation="none")                
                 axarr[w, o].set_xticks([])
                 axarr[w, o].set_yticks([])
                 if w == self._wavelengths[0]:
-                    axarr[w, o].set_xlabel('{:02.1f}$\degree$'
-                                    .format(orientation * 180 / np.pi))
+                    degrees = orientation * 180 / np.pi
+                    if degrees - int(degrees) == 0:
+                        label = '{:2d}$\degree$'.format(int(degrees))
+                    else:
+                        label = '{:2.1f}$\degree$'.format(degrees)
+                    axarr[w, o].set_xlabel(label)
                 if o == self._orientations[0]:
                     axarr[w, o].set_ylabel('{:2d}'.format(wavelength))
         
+        fig.text(0.5, 0.04, 'Orientations (in degrees)', ha='center', fontsize=15)
+        fig.text(0.09, 0.5, 'Wavelenghts (in pixels)', va='center',
+                            rotation='vertical', fontsize=15)
+
+        fig.suptitle('Bank of Gabor Kernels', fontsize=35)
         return fig
