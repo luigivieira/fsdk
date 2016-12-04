@@ -79,16 +79,6 @@ class FaceData:
         (mark2.x, mark2.y), ..., (mark67.x, mark67.y)]`.
         """
         
-        self._downSampleRatio = 4
-        """
-        Ratio by which images should be down-sampled when the landmarks are
-        detected.
-        
-        This ratio is used to reduce the size of images before detecting the
-        face region, in order to improve the performance (the face detection is
-        the most costly procedure).
-        """
-        
     #---------------------------------------------        
     def isEmpty(self):
         """
@@ -113,7 +103,7 @@ class FaceData:
             return False
         
     #---------------------------------------------        
-    def detect(self, image):
+    def detect(self, image, downSampleRatio = None):
         """
         Tries to automatically detect a face in the given image.
         
@@ -130,6 +120,7 @@ class FaceData:
             Instance of the FaceData object.
         image: numpy.array
             Image data where to search for the face.
+        downSampleRatio: float
             
         Returns
         ------
@@ -150,17 +141,20 @@ class FaceData:
         # Ignore all black images
         if cv2.countNonZero(image[:,:,0]) == 0:
             return False
-            
-        # Scale down the original image in order to improve performance
-        # in the initial face detection
-        smallImage = cv2.resize(image, (0, 0), fx=1.0/self._downSampleRatio,
-                                               fy=1.0/self._downSampleRatio)
         
-        # Detect faces in the smaller image
+        # If requested, scale down the original image in order to improve
+        # performance in the initial face detection
+        if downSampleRatio is not None:
+            detImage = cv2.resize(image, (0, 0), fx=1.0/downSampleRatio,
+                                                   fy=1.0/downSampleRatio)
+        else:
+            detImage = image
+        
+        # Detect faces in the image
         # (the 1 in the call to FaceData._detector indicates the number of up
         # samples performed before the detection - refer to dlib's documentation
         # for details)
-        detectedFaces = FaceData._detector(smallImage, 1)
+        detectedFaces = FaceData._detector(detImage, 1)
         if len(detectedFaces) == 0:
             return False
 
@@ -174,13 +168,14 @@ class FaceData:
             if area > maxArea:
                 maxArea = area
                 maxRegion = region
-            
-        # Scale back the detected region, so the landmarks
-        # can be proper located on the full resolution image
-        region = dlib.rectangle(maxRegion.left() * self._downSampleRatio,
-                                maxRegion.top() * self._downSampleRatio,
-                                maxRegion.right() * self._downSampleRatio,
-                                maxRegion.bottom() * self._downSampleRatio)
+                
+        # If downsampling was requested, scale back the detected region so the 
+        # landmarks can be proper located on the full resolution image
+        if downSampleRatio is not None:
+            region = dlib.rectangle(maxRegion.left() * downSampleRatio,
+                                    maxRegion.top() * downSampleRatio,
+                                    maxRegion.right() * downSampleRatio,
+                                    maxRegion.bottom() * downSampleRatio)
                                 
         # Fit the shape model over the biggest face region to predict the
         # positions of its facial landmarks

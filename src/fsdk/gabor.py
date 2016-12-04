@@ -111,33 +111,36 @@ class KernelParams:
 #=============================================
 class GaborBank:
     """
-    Represents a bank of gabor kernels.
+    Represents the bank of gabor kernels.
     """
     
     #---------------------------------------------
-    def __init__(self, wavelengths, orientations):
+    def __init__(self):
         """
-        Class constructor. Create a bank of Gabor kernels for the given
-        wavelengths and orientations.
+        Class constructor. Create a bank of Gabor kernels with a predefined set
+        of wavelengths and orientations.
         
-        The bank will be composed of one kernel for each combination of
-        wavelength x orientation.
+        The bank is composed of one kernel for each combination of wavelength x
+        orientation. For the rationale regading the choice of parameters, refer
+        to the thesis text.
         
         Parameters
         ------
         self: MediaFile
             Instance of the MediaFile object.
-        wavelengths: list(float)
-            List of wavelengths (in pixels) for the Gabor kernels.
-        orientations: list(float)
-            List of orientations (in radians) for the Gabor kernels.
         """
         
-        self._wavelengths = wavelengths
-        """List of wavelengths used to create the bank of Gabor kernels."""
+        self._wavelengths = [3, 6, 9, 12]
+        """
+        List of wavelengths (in pixels) used to create the bank of Gabor
+        kernels.
+        """
         
-        self._orientations = orientations
-        """List of orientations used to create the bank of Gabor kernels."""
+        self._orientations = [i for i in np.arange(0, np.pi, np.pi / 8)]
+        """
+        List of orientations (in radians) used to create the bank of Gabor
+        kernels.
+        """
         
         self._bank = {}
         """Dictionary holding the Gabor kernels in the bank."""
@@ -147,17 +150,67 @@ class GaborBank:
             for orientation in self._orientations:
                 # Convert wavelength to spatial frequency (scikit-image's
                 # interface expects spatial frequency, even though the
-                # implementation uses wavelengths)
+                # equation uses wavelengths - see https://en.wikipedia.org/wiki/
+                # Gabor_filter/)
                 frequency = 1 / wavelength
                 
                 # Create and save the kernel
                 kernel = gabor_kernel(frequency, orientation)
                 par = KernelParams(wavelength, orientation)
                 self._bank[par] = kernel
+
+    #---------------------------------------------
+    def filter(self, image):
+        """
+        Filter the given image with the Gabor kernels in this bank.
+        
+        Parameters
+        ----------
+        image: numpy.array
+            Image to be filtered.
+            
+        Returns
+        -------
+        responses: list
+            List of the responses of the filtering with the Gabor kernels. The
+            responses are the magnitude of both the real and imaginary parts of
+            the convolution with each kernel, hence this list dimensions are the
+            same of the image, plus another dimension for the 32 responses (one
+            for each kernel in the bank, since there are 4 wavelengths and 8
+            orientations).
+        """
+        
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        
+        responses = []
+        for wavelength in self._wavelengths:
+            for orientation in self._orientations:
+                frequency = 1 / wavelength
+                par = KernelParams(wavelength, orientation)
+                kernel = self._bank[par]
+                real = cv2.filter2D(image, cv2.CV_32F, kernel.real)
+                imag = cv2.filter2D(image, cv2.CV_32F, kernel.imag)
+                
+                responses.append(cv2.magnitude(real, imag))
+                
+        return responses
                 
     #---------------------------------------------
     def createPlotFigure(self):
-    
+        """
+        Create a matplotlib figure with the 2D representations of the Gabor 
+        kernels in this bank.
+       
+        Parameters
+        ----------
+        self: MediaFile
+            Instance of the MediaFile object.
+            
+        Returns
+        -------
+        fig: matplotlib.figure
+            Figure object created with the representation of the bank.
+        """
         # Create a new figure with a subplot for each kernel
         numW = len(self._wavelengths)
         numO = len(self._orientations)
