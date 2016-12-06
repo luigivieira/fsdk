@@ -30,6 +30,7 @@ import numpy as np
 import dlib
 import cv2
 import csv
+
 from fsdk.ui import getChar
 
 #=============================================
@@ -158,24 +159,17 @@ class FaceData:
         if len(detectedFaces) == 0:
             return False
 
-        # Iterate through the detected face regions to find the biggest one
-        maxArea = 0
-        maxRegion = None
-        for region in detectedFaces:
-            width = (region.right() - region.left())
-            height = (region.bottom() - region.top())
-            area = width * height
-            if area > maxArea:
-                maxArea = area
-                maxRegion = region
+        # No matter how many faces have been found, consider only the first one
+        # (the closest one on the image's field of view)
+        region = detectedFaces[0]
                 
         # If downsampling was requested, scale back the detected region so the 
         # landmarks can be proper located on the full resolution image
         if downSampleRatio is not None:
-            region = dlib.rectangle(maxRegion.left() * downSampleRatio,
-                                    maxRegion.top() * downSampleRatio,
-                                    maxRegion.right() * downSampleRatio,
-                                    maxRegion.bottom() * downSampleRatio)
+            region = dlib.rectangle(region.left() * downSampleRatio,
+                                    region.top() * downSampleRatio,
+                                    region.right() * downSampleRatio,
+                                    region.bottom() * downSampleRatio)
                                 
         # Fit the shape model over the biggest face region to predict the
         # positions of its facial landmarks

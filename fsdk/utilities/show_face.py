@@ -29,8 +29,13 @@ import sys
 from datetime import datetime
 import argparse
 import cv2
-from fsdk.media import MediaFile, MediaType
-from fsdk.data import FaceDataSet, FaceData
+
+if __name__ == '__main__':
+    import sys
+    sys.path.append('../../')
+
+from fsdk.data.media import MediaFile, MediaType
+from fsdk.data.faces import FaceDataSet, FaceData
 
 #---------------------------------------------
 def main(argv):

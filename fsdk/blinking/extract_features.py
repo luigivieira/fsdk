@@ -31,20 +31,26 @@ import argparse
 import csv
 from glob import glob
 import cv2
-from fsdk.data import FaceData
-from fsdk.gabor import GaborBank
+import numpy as np
+
+if __name__ == '__main__':
+    import sys
+    sys.path.append('../../')
+    
+from fsdk.data.faces import FaceData
+from fsdk.data.gabor import GaborBank
+import fsdk.ui as ui
 
 #---------------------------------------------
 def main(argv):
     """
     Extracts the features to train the eye blinking detector.
     
-    This script process images from the CK+ (Cohn-Kanade AU-Coded Expression 
-    Database - version 2: http://www.pitt.edu/~emotion/ck-spread.htm) and CEW 
-    (Closed EyesIn The Wild: http://parnec.nuaa.edu.cn/xtan/data/
-    ClosedEyeDatabases.html) datasets, used respectively as face samples with 
-    opened and closed eyes, in order to extract the features used to create the 
-    eye blinking classifier.
+    This script process images from the LFW (Labeled Faces in the Wild: 
+    http://www.pitt.edu/~emotion/ck-spread.htm) and CEW (Closed Eyes In The 
+    Wild: http://parnec.nuaa.edu.cn/xtan/data/ClosedEyeDatabases.html) datasets,
+    used respectively as face samples with opened and closed eyes in order to 
+    extract the features used to create the Closed Eye Classifier.
     
     Parameters
     ------
@@ -60,8 +66,8 @@ def main(argv):
     ############################
     # Check command line parameters received
     ############################
-    if not os.path.isdir(args.ckplusPath):
-        print('CK+ path does not exist: {}'.format(args.ckplusPath))
+    if not os.path.isdir(args.lfwPath):
+        print('LFW path does not exist: {}'.format(args.lfwPath))
         sys.exit(-1)
     
     if not os.path.isdir(args.cewPath):
@@ -77,16 +83,15 @@ def main(argv):
     ############################
     # Get the list of images from the datasets
     ############################
-    p = '{}/**/*.png'.format(args.ckplusPath)
-    ckplusImages = glob(p, recursive=True)
-    if len(ckplusImages) == 0:
-        print('No images were found on CK+ path {}'.format(args.ckplusPath))
+    lfwImages = glob('{}/**/*.jpg'.format(args.lfwPath), recursive=True)
+    if len(lfwImages) == 0:
+        print('No images were found on the LFW path {}'.format(args.lfwPath))
         file.close()
         sys.exit(-4)
         
     cewImages = glob('{}/**/*.jpg'.format(args.cewPath), recursive=True)
     if len(cewImages) == 0:
-        print('No images were found on CEW path {}'.format(args.cewPath))
+        print('No images were found on the CEW path {}'.format(args.cewPath))
         file.close()
         sys.exit(-5)
     
@@ -105,19 +110,29 @@ def main(argv):
     
     bank = GaborBank()
     
-    # Get responses for the negative images (i.e. without blinking)
-    for image in ckplusImages:
-        print('Processing file {}...'.format(image))
+    # Get responses for the negative images (i.e. without blinking)    
+    procCount = 0
+    total = len(lfwImages) + len(cewImages)
+    for image in lfwImages:
+        prefix = '{:40.40s}'.format(os.path.split(image)[1])
+        ui.printProgress(procCount, total, prefix, barLength=100)
+        procCount += 1
+        
         ret, responses = getResponses(image, bank)
-        row = [os.path.split(image)[1]] + responses + [0]
-        writer.writerow(row)
+        if ret:
+            row = [os.path.split(image)[1]] + responses + [0]
+            writer.writerow(row)
         
     # Get responses for the positive images (i.e. with blinking)
     for image in cewImages:
-        print('Processing file {}...'.format(image))
+        prefix = '{:40.40s}'.format(os.path.split(image)[1])
+        ui.printProgress(procCount, total, prefix, barLength=100)
+        procCount += 1
+        
         ret, responses = getResponses(image, bank)
-        row = [os.path.split(image)[1]] + responses + [1]
-        writer.writerow(row)
+        if ret:
+            row = [os.path.split(image)[1]] + responses + [1]
+            writer.writerow(row)
     
     file.close()
     sys.exit(0)
@@ -134,32 +149,42 @@ def getResponses(imageFilename, gaborBank):
     if not face.detect(image):
         return False, []
         
+    # Ignore partially occluded faces
+    for point in face.points:
+        if (point[0] < 0 or point[0] >= image.shape[1] or
+            point[1] < 0 or point[1] >= image.shape[0]):
+            return False, []
+        
     # Crop the image to include only the face region
     left = face.region[0]
     top = face.region[1]
     right = face.region[2]
     bottom = face.region[3]
-    image = image[top:bottom+1,left:right+1]
-    
-    # Teste
+    image = image[top:bottom+1, left:right+1]
+
+    # Adjust the landmarks and region according to the cropping
+    points = []
     for point in face.points:
-        print((point[0] - left, point[1] - top))
-        cv2.circle(image, (point[0] - left, point[1] - top), 1, (0, 0, 255), 2)
-    cv2.imwrite('c:/temp/teste/{}'.format(os.path.split(imageFilename)[1]), image)
+        points.append((point[0] - left, point[1] - top))
+    
+    face.points = points
+    face.region = (face.region[0] - left, face.region[1] - top,
+                   face.region[2] - left, face.region[3] - top)
+    
+    # Debug
+    t = image.copy()
+    face.draw(t)
+    cv2.imwrite('c:/temp/teste/{}'.format(os.path.split(imageFilename)[1]), t)
     
     # Get the responses of the bank of Gabor filters
     responses = gaborBank.filter(image)
     
-    print('-------------')
-    print(image.shape)
-    print('-------------')
-    
     # Build the return (the responses only at the landmarks)
     ret = []
+        
     for point in face.points:
-        for resp in responses:
-            print(resp.shape)
-            ret.append(resp[point[0] - left, point[1] - top])
+        for resp in responses:            
+            ret.append(resp[point[1], point[0]])
     
     return True, ret
     
@@ -185,12 +210,12 @@ def parseCommandLine(argv):
     
     """
     parser = argparse.ArgumentParser(
-                        description='Extracts the features used by the Eye '
-                                    'Blinking detector.')
-    parser.add_argument('ckplusPath',
-                        help='Path to the CK+ (Cohn-Kanade AU-Coded Expression '
-                             'Database - version 2) dataset, containing the '
-                             'image samples of faces with opened eyes.')
+                        description='Extracts the features used by the Closed '
+                                    'Eyes Classifier.')
+    parser.add_argument('lfwPath',
+                        help='Path to the LFW (Labeled Faces in the Wild) '
+                             'dataset, containing the image samples of faces '
+                             'with opened eyes.')
     parser.add_argument('cewPath',
                         help='Path to the CEW (Closed Eyes In The Wild) '
                              'dataset, containing the image samples of faces '

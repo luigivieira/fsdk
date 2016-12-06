@@ -62,8 +62,8 @@ def getChar():
         return answer
 
 #---------------------------------------------
-def printProgress(iteration, total, prefix = '', suffix = '', decimals = 2,
-                  barLength = 80):
+def printProgress(iteration, total, prefix = 'Processing:',
+                    suffix = 'completed.', barLength = 80, decimals = 2):
     """
     Call in a loop to create a terminal progress bar.
     
@@ -77,17 +77,18 @@ def printProgress(iteration, total, prefix = '', suffix = '', decimals = 2,
     total: int
         Value of the total of iterations.
     prefix: str
-        Optional string with a prefix. The default is empty (`''`).
+        Optional string with a prefix. The default is `'Processing:'`.
     suffix: str
-        Optional string with a suffix. The default is empty (`''`).
+        Optional string with a suffix. The default is `'completed.'`.
+    barLength: int
+        Optional number with the length of the progress bar (including the 
+        lengths of prefix and suffix). The default is 80.
     decimals: int
         Optional positive value with the number of decimals to use when showing
         the percent complete. The default is 2.
-    barLength: int
-        Optional number with the character length of the progress bar. The
-        default is 80.
     """
     
+    barLength -= (len(prefix) + len(suffix))
     formatStr = "{0:." + str(decimals) + "f}"
     percent = formatStr.format(100 * (iteration / float(total)))
     filledLength = int(round(barLength * iteration / float(total)))
