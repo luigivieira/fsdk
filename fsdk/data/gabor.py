@@ -179,14 +179,23 @@ class GaborBank:
         
         responses = []
         for wavelength in self._wavelengths:
-            for orientation in self._orientations:
+            for orientation in self._orientations:            
+            
+                # Get the kernel
                 frequency = 1 / wavelength
                 par = KernelParams(wavelength, orientation)
                 kernel = self._bank[par]
+                
+                # Filter with both real and imaginary parts 
                 real = cv2.filter2D(image, cv2.CV_32F, kernel.real)
                 imag = cv2.filter2D(image, cv2.CV_32F, kernel.imag)
                 
-                responses.append(cv2.magnitude(real, imag))
+                # The response is the magnitude of the real and imaginary
+                # responses to the filters, normalized to [-1, 1]
+                mag = cv2.magnitude(real, imag)                
+                cv2.normalize(mag, mag, -1, 1, cv2.NORM_MINMAX)
+                
+                responses.append(mag)
                 
         return responses
                 
@@ -257,7 +266,7 @@ class GaborBank:
         return fig
         
     #---------------------------------------------
-    def createTestPlot(self, image):
+    def createTestPlotFigure(self, image):
         """
         Create a matplotlib figure with the responses of the bank to the given
         image.
