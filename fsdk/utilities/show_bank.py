@@ -53,6 +53,10 @@ def main(argv):
 
     # Plot the gabor bank
     fig = bank.createPlotFigure()
+    
+    # Show the plot on a maximized window
+    mng = plt.get_current_fig_manager()
+    mng.window.state('zoomed')
     plt.show()
 
 #---------------------------------------------
