@@ -125,7 +125,6 @@ class GaborBank:
         to the thesis text.
         """
         
-        #self._wavelengths = [3, 6, 9, 12]
         self._wavelengths = [4, 7, 10, 13]
         """
         List of wavelengths (in pixels) used to create the bank of Gabor
