@@ -125,7 +125,8 @@ class GaborBank:
         to the thesis text.
         """
         
-        self._wavelengths = [3, 6, 9, 12]
+        #self._wavelengths = [3, 6, 9, 12]
+        self._wavelengths = [4, 7, 10, 13]
         """
         List of wavelengths (in pixels) used to create the bank of Gabor
         kernels.
@@ -206,20 +207,19 @@ class GaborBank:
         numO = len(self._orientations)
 
         fig, axarr = plt.subplots(numW, numO)
-
         
         # This is the dimension of each kernel image representation
         rows = 64
         cols = 64
         
-        for w, wavelength in zip(range(numW), self._wavelengths):
-            for o, orientation in zip(range(numO), self._orientations):
+        for w, wavelength in enumerate(self._wavelengths):
+            for o, orientation in enumerate(self._orientations):
                 par = KernelParams(wavelength, orientation)
-                k = np.array(self._bank[par].real)                
+                k = np.array(self._bank[par].real)
                 cv2.normalize(k, k, -1, 1, cv2.NORM_MINMAX)
                 
                 img = np.zeros((rows, cols), np.float)
-                img[:,:] = 1
+                img[:,:] = np.mean(k)
                 
                 y = int(img.shape[0] / 2 - k.shape[0] / 2)
                 x = int(img.shape[1] / 2 - k.shape[1] / 2)
@@ -228,15 +228,17 @@ class GaborBank:
 
                 im = axarr[w, o].imshow(img, cmap='hot', vmin=-1, vmax=1)
                 axarr[w, o].set_xticks([])
-                axarr[w, o].set_yticks([])          
-                if w == self._wavelengths[0]:
+                axarr[w, o].set_yticks([])
+                
+                if w == numW - 1:
                     degrees = orientation * 180 / np.pi
                     if degrees - int(degrees) == 0:
                         label = '{:2d}$\degree$'.format(int(degrees))
                     else:
                         label = '{:2.1f}$\degree$'.format(degrees)
                     axarr[w, o].set_xlabel(label)
-                if o == self._orientations[0]:
+                
+                if o == 0:
                     axarr[w, o].set_ylabel('{:2d}'.format(wavelength))
         
         fig.text(0.5, 0.04, 'Orientations (in degrees)',
@@ -247,7 +249,7 @@ class GaborBank:
         fig.suptitle('Bank of Gabor Kernels (real parts only)', fontsize=35)
         fig.set_facecolor('white')
         
-        # Add a colorbar
+        # Add the source image and a colorbar
         fig.subplots_adjust(right=0.9)
         
         axis = fig.add_axes([0.92, 0.15, 0.02, 0.7])
@@ -282,8 +284,8 @@ class GaborBank:
 
         fig, axarr = plt.subplots(numW, numO)
         
-        for w, wavelength in zip(range(numW), self._wavelengths):
-            for o, orientation in zip(range(numO), self._orientations):
+        for w, wavelength in enumerate(self._wavelengths):
+            for o, orientation in enumerate(self._orientations):
                 par = KernelParams(wavelength, orientation)
                 kernel = self._bank[par]
                 
@@ -295,14 +297,14 @@ class GaborBank:
                 im = axarr[w, o].imshow(response, cmap='hot', vmin=-1, vmax=1)
                 axarr[w, o].set_xticks([])
                 axarr[w, o].set_yticks([])
-                if w == self._wavelengths[0]:
+                if w == numW - 1:
                     degrees = orientation * 180 / np.pi
                     if degrees - int(degrees) == 0:
                         label = '{:2d}$\degree$'.format(int(degrees))
                     else:
                         label = '{:2.1f}$\degree$'.format(degrees)
                     axarr[w, o].set_xlabel(label)
-                if o == self._orientations[0]:
+                if o == 0:
                     axarr[w, o].set_ylabel('{:2d}'.format(wavelength))
         
         # Add the titles
@@ -323,7 +325,7 @@ class GaborBank:
         axis.set_xlabel('Original Image', fontsize=15)
         axis.set_yticks([])
         
-        cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
-        fig.colorbar(im, cax=cbar_ax)
+        axis = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+        fig.colorbar(im, cax=axis)
         
         return fig

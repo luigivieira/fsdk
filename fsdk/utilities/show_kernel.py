@@ -34,6 +34,7 @@ from skimage.filters import gabor_kernel
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from mpl_toolkits.mplot3d import Axes3D
+import cv2
 
 #---------------------------------------------
 def main(argv):
@@ -63,30 +64,43 @@ def main(argv):
     # Grid to make easier accessing plots
     plots = gridspec.GridSpec(2, 2)
     
+    # Normalize the kernel data (real and imaginary) to make easier the
+    # visualization
+    kreal = np.array(kernel.real)
+    kimag = np.array(kernel.imag)
+    cv2.normalize(kreal, kreal, -1, 1, cv2.NORM_MINMAX)
+    cv2.normalize(kimag, kimag, -1, 1, cv2.NORM_MINMAX)
+    
     # Plot the real part in 2D and 3D
-    axis = fig.add_subplot(plots[0, 0])
-    plotKernel2D(kernel.real, axis, 'Real Part (2D View)')
+    axis = fig.add_subplot(plots[0, 0])    
+    plotKernel2D(kreal, axis, 'Real Part (2D View)')
     
     axis = fig.add_subplot(plots[0, 1], projection='3d')
-    plotKernel3D(kernel.real, axis, 'Real Part (3D View)')
+    plotKernel3D(kreal, axis, 'Real Part (3D View)')
     
     # Plot the imaginary part in 2D and 3D
     axis = fig.add_subplot(plots[1, 0])
-    plotKernel2D(kernel.imag, axis, 'Imaginary Part (2D View)')
+    im = plotKernel2D(kimag, axis, 'Imaginary Part (2D View)')
     
     axis = fig.add_subplot(plots[1, 1], projection='3d')
-    plotKernel3D(kernel.imag, axis, 'Imaginary Part (3D View)')
+    plotKernel3D(kimag, axis, 'Imaginary Part (3D View)')
 
     if args.orientation - int(args.orientation) > 0:
-        title = 'Gabor Kernel ($\\lambda={:2d}$, $\\theta={:2.2f}\\degree$)' \
+        title = 'Gabor Kernel for $\\lambda={:2d}$ and $\\theta={:2.2f}\\degree$' \
                 .format(args.wavelength, args.orientation)
     else:
-        title = 'Gabor Kernel ($\\lambda={:2d}$, $\\theta={:2.0f}\\degree$)' \
+        title = 'Gabor Kernel for $\\lambda={:2d}$ and $\\theta={:2.0f}\\degree$' \
                 .format(args.wavelength, args.orientation)
             
     # Set title and background
     fig.suptitle(title, fontsize=30)
     fig.set_facecolor('white')
+    
+    # Add a colorbar
+    fig.subplots_adjust(right=0.8)
+   
+    axis = fig.add_axes([0.85, 0.15, 0.02, 0.7])
+    fig.colorbar(im, cax=axis)
     
     # Show the plots on a maximized window
     mng = plt.get_current_fig_manager()
@@ -143,13 +157,18 @@ def plotKernel2D(kernel, figAxis, title):
         Figure axis where to plot the graphic.
     title: str
         Title of the graphic built.
+        
+    Returns
+    -------
+    imAxis: matplotlib.axis
+        Axis in which the image is placed on the plot.
     """
     figAxis.set_title(title, fontsize=15)
     figAxis.set_xlabel('x')
     figAxis.set_ylabel('y')
     figAxis.set_xticks([])
     figAxis.set_yticks([])
-    figAxis.imshow(kernel.real, cmap='hot')
+    return figAxis.imshow(kernel.real, cmap='hot', interpolation='bicubic')
     
 #---------------------------------------------
 def plotKernel3D(kernel, figAxis, title):
