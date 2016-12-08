@@ -137,7 +137,7 @@ class GaborBank:
         kernels.
         """
         
-        self._bank = {}
+        self._kernels = {}
         """Dictionary holding the Gabor kernels in the bank."""
         
         # Create one kernel for each combination of wavelength x orientation
@@ -152,7 +152,7 @@ class GaborBank:
                 # Create and save the kernel
                 kernel = gabor_kernel(frequency, orientation)
                 par = KernelParams(wavelength, orientation)
-                self._bank[par] = kernel
+                self._kernels[par] = kernel
 
     #---------------------------------------------
     def filter(self, image):
@@ -184,7 +184,7 @@ class GaborBank:
                 # Get the kernel
                 frequency = 1 / wavelength
                 par = KernelParams(wavelength, orientation)
-                kernel = self._bank[par]
+                kernel = self._kernels[par]
                 
                 # Filter with both real and imaginary parts 
                 real = cv2.filter2D(image, cv2.CV_32F, kernel.real)
@@ -223,7 +223,7 @@ class GaborBank:
         for w, wavelength in enumerate(self._wavelengths):
             for o, orientation in enumerate(self._orientations):
                 par = KernelParams(wavelength, orientation)
-                k = np.array(self._bank[par].real)
+                k = np.array(self._kernels[par].real)
                 cv2.normalize(k, k, -1, 1, cv2.NORM_MINMAX)
                 
                 img = np.zeros((rows, cols), np.float)
@@ -295,7 +295,7 @@ class GaborBank:
         for w, wavelength in enumerate(self._wavelengths):
             for o, orientation in enumerate(self._orientations):
                 par = KernelParams(wavelength, orientation)
-                kernel = self._bank[par]
+                kernel = self._kernels[par]
                 
                 real = cv2.filter2D(image, cv2.CV_32F, kernel.real)
                 imag = cv2.filter2D(image, cv2.CV_32F, kernel.imag)

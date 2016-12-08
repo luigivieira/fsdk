@@ -98,17 +98,22 @@ def main(argv):
     ############################
     # Extract the features!
     ############################
-    writer = csv.writer(file, delimiter=',', quotechar='"',
-                            quoting=csv.QUOTE_MINIMAL)
-            
-    # Write the header
-    header = ['image']
-    for i in range(68):
-        header.append('resp.{:02d}'.format(i))
-    header.append('blinking')
-    writer.writerow(header)
     
     bank = GaborBank()
+    
+    writer = csv.writer(file, delimiter=',', quotechar='"',
+                            quoting=csv.QUOTE_MINIMAL)
+
+    # Write the header
+    header = ['image']
+    
+    eyeFeatures = FaceData._leftEye + FaceData._rightEye
+    for i in range(len(eyeFeatures)):
+        for j in range(len(bank._kernels)):
+            header.append('resp.{:d}.{:d}'.format(i, j))
+            
+    header.append('blinking')
+    writer.writerow(header)
     
     # Get responses for the negative images (i.e. without blinking)    
     procCount = 0
@@ -171,18 +176,14 @@ def getResponses(imageFilename, gaborBank):
     face.region = (face.region[0] - left, face.region[1] - top,
                    face.region[2] - left, face.region[3] - top)
     
-    # Debug
-    t = image.copy()
-    face.draw(t)
-    cv2.imwrite('c:/temp/teste/{}'.format(os.path.split(imageFilename)[1]), t)
-    
     # Get the responses of the bank of Gabor filters
     responses = gaborBank.filter(image)
     
-    # Build the return (the responses only at the landmarks)
+    # Build the return (the responses only at the eye landmarks)
     ret = []
         
-    for point in face.points:
+    eyeFeatures = FaceData._leftEye + FaceData._rightEye
+    for point in np.int32(face.points)[eyeFeatures]:
         for resp in responses:            
             ret.append(resp[point[1], point[0]])
     
