@@ -51,6 +51,51 @@ class FaceData:
     landmarks in images, shared by all instances of FaceData.
     """
     
+    _jawLine = [i for i in range(17)]
+    """
+    Indexes of the landmarks at the jaw line
+    """
+            
+    _leftEyebrow = [i for i in range(17,22)]
+    """
+    Indexes of the landmarks at the left eyebrow
+    """
+                
+    _rightEyebrow = [i for i in range(22,27)]
+    """
+    Indexes of the landmarks at the right eyebrow
+    """
+        
+    _noseBridge = [i for i in range(27,31)]
+    """
+    Indexes of the landmarks at the nose bridge
+    """
+    
+    _lowerNose = [i for i in range(30,36)]
+    """
+    Indexes of the landmarks at the lower nose
+    """
+        
+    _leftEye = [i for i in range(36,42)]
+    """
+    Indexes of the landmarks at the left eye
+    """
+    
+    _rightEye = [i for i in range(42,48)]
+    """
+    Indexes of the landmarks at the right eye
+    """
+    
+    _outerLip = [i for i in range(48,60)]
+    """
+    Indexes of the landmarks at the outer lip
+    """
+    
+    _innerLip = [i for i in range(60,68)]
+    """
+    Indexes of the landmarks at the inner lip
+    """
+    
     #---------------------------------------------
     def __init__(self):
         """
@@ -233,10 +278,10 @@ class FaceData:
             Image data where to draw the face data.
         drawRegion: bool
             Optional value indicating if the region area should also be drawn.
-            The default is true.
+            The default is True.
         drawFaceModel: bool
             Optional value indicating if the face model should also be drawn.
-            The default is true.
+            The default is True.
             
         Returns
         ------
@@ -264,29 +309,24 @@ class FaceData:
                                  (255,0,0), 2)
 
         # Draw the positions of landmarks
+        color = (0, 0, 255)
         for i in range(68):
-            cv2.circle(image, self.points[i], 1, (0, 0, 255), 2)
+            cv2.circle(image, self.points[i], 1, color, 2)
             
         # Draw the face model if requested
         if drawFaceModel:
-            # draw the jaw line
-            cv2.polylines(image, np.int32([self.points[0:17]]),  False, (255,0, 255), 2)
-            # draw the left eyebrow
-            cv2.polylines(image, np.int32([self.points[17:22]]), False, (255,0, 255), 2)
-            # draw the right eyebrow
-            cv2.polylines(image, np.int32([self.points[22:27]]), False, (255,0, 255), 2)
-            # draw the nose bridge
-            cv2.polylines(image, np.int32([self.points[27:31]]), False, (255,0, 255), 2)
-            # draw the lower nose
-            cv2.polylines(image, np.int32([self.points[30:36]]), True,  (255,0, 255), 2)
-            # draw the left eye
-            cv2.polylines(image, np.int32([self.points[36:42]]), True,  (255,0, 255), 2)
-            # draw the right eye
-            cv2.polylines(image, np.int32([self.points[42:48]]), True,  (255,0, 255), 2)
-            # draw the outer lip
-            cv2.polylines(image, np.int32([self.points[48:60]]), True,  (255,0, 255), 2)
-            # draw the inner lip
-            cv2.polylines(image, np.int32([self.points[60:68]]), True,  (255,0, 255), 2)
+            color = (255,0, 255)
+            p = np.int32(self.points)
+            
+            cv2.polylines(image, [p[FaceData._jawLine]], False, color, 2)
+            cv2.polylines(image, [p[FaceData._leftEyebrow]], False, color, 2)
+            cv2.polylines(image, [p[FaceData._rightEyebrow]], False, color, 2)
+            cv2.polylines(image, [p[FaceData._noseBridge]], False, color, 2)
+            cv2.polylines(image, [p[FaceData._lowerNose]], True, color, 2)
+            cv2.polylines(image, [p[FaceData._leftEye]], True, color, 2)
+            cv2.polylines(image, [p[FaceData._rightEye]], True, color, 2)
+            cv2.polylines(image, [p[FaceData._outerLip]], True, color, 2)
+            cv2.polylines(image, [p[FaceData._innerLip]], True, color, 2)
         
         return image
         
