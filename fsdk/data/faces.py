@@ -222,41 +222,17 @@ class FaceData:
 
         # Update the object data with the predicted landmark positions and
         # their bounding box (with a small margin of 10 pixels)
-        points = []
-        cols = image.shape[1]
-        rows = image.shape[0]
-        minX = cols
-        minY = rows
-        maxX = 0
-        maxY = 0
-        for point in faceShape.parts():
-            points.append((point.x, point.y))
-            if point.x < minX:
-                minX = point.x
-            if point.y < minY:
-                minY = point.y
-            if point.x > maxX:
-                maxX = point.x
-            if point.y > maxY:
-                maxY = point.y
-
+        self.points = [(p.x, p.y) for p in faceShape.parts()]
+        
         margin = 10
-        minX -= margin        
-        minY -= margin
-        maxX += margin
-        maxY += margin
-        if minX < 0:
-            minX = 0
-        if minY < 0:
-            minY = 0
-        if maxX >= cols:
-            maxX = cols - 1
-        if maxY >= rows:
-            maxY = rows - 1
+        x, y, w, h = cv2.boundingRect(np.array(self.points))
+        self.region = (
+                       max(x - margin, 0),
+                       max(y - margin, 0),
+                       min(x + w + margin, image.shape[1] - 1),
+                       min(y + h + margin, image.shape[0] - 1)
+                      )
 
-        # Update the object instance data with the face detected
-        self.region = (minX, minY, maxX, maxY)
-        self.points = points
         return True
     
     #---------------------------------------------
