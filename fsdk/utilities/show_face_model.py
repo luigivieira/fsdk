@@ -79,7 +79,8 @@ def main(argv):
     model = model[r[1]:r[3]+1, r[0]:r[2]+1]
     
     if args.save is not None:
-        cv2.imwrite(args.save, model)
+        if not cv2.imwrite(args.save, model):
+            print('Could not write to file {}'.format(args.save))
     
     cv2.imshow('Face Model', model)
     cv2.waitKey(0)
