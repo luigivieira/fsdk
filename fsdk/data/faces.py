@@ -170,7 +170,6 @@ class Face:
             modulePath = os.path.dirname(__file__)
             faceModel = os.path.abspath('{}/../models/face_model.dat' \
                             .format(modulePath))
-            print('faceModel = {}'.format(faceModel))
             Face._predictor = dlib.shape_predictor(faceModel)
 
         # Ignore all black images
