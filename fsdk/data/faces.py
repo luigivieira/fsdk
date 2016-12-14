@@ -32,23 +32,24 @@ import cv2
 import csv
 
 from fsdk.ui import getChar
+from fsdk.data.gabor import GaborBank
 
 #=============================================
-class FaceData:
+class Face:
     """
-    Represents facial data (region and landmarks) found on an image.
+    Represents a face (with its region and landmarks) found on an image.
     """
     
     _detector = None
     """
     Instance of the dlib's object used to detect faces in images, shared by all
-    instances of FaceData.
+    instances of this class.
     """
 
     _predictor = None
     """
     Instance of the dlib's object used to predict the positions of facial
-    landmarks in images, shared by all instances of FaceData.
+    landmarks in images, shared by all instances of this class.
     """
     
     _jawLine = [i for i in range(17)]
@@ -100,11 +101,6 @@ class FaceData:
     def __init__(self):
         """
         Class constructor.
-        
-        Parameters
-        ------
-        self: FaceData
-            Instance of the FaceData object.
         """
         
         self.region = ()
@@ -112,30 +108,23 @@ class FaceData:
         Region where the face is found on the image.
         
         It is a tuple of int values describing the region in terms of the
-        top-left and bottom-right coordinates where the face is located: `(face.
-        left, face.top, face.right, face.bottom)`.
+        top-left and bottom-right coordinates where the face is located.
         """
         
-        self.points = []
+        self.landmarks = np.array([])
         """
-        Coordinates of the landmark points on the image.
+        Coordinates of the landmarks on the image.
         
-        It is a list of tuples with int values describing the x and y positions
-        of each of the 68 landmarks: `[(mark0.x, mark0.y), (mark1.x, mark1.y), 
-        (mark2.x, mark2.y), ..., (mark67.x, mark67.y)]`.
+        It is an array of pair of values describing the x and y positions of
+        each of the 68 landmarks.
         """
         
     #---------------------------------------------        
     def isEmpty(self):
         """
-        Check if the FaceData object is empty.
+        Check if the Face object is empty.
         
-        An empty FaceData object have no region and no points. Simple as that.
-        
-        Parameters
-        ------        
-        self: FaceData
-            Instance of the FaceData object.
+        An empty Face object have no region and no landmarks.
         
         Returns
         ------
@@ -143,7 +132,7 @@ class FaceData:
             Indication on whether this object is empty.
         """
         
-        if len(self.region) == 0 and len(self.points) == 0:
+        if len(self.region) == 0 and len(self.landmarks) == 0:
             return True
         else:
             return False
@@ -162,8 +151,6 @@ class FaceData:
         
         Parameters
         ------        
-        self: FaceData
-            Instance of the FaceData object.
         image: numpy.array
             Image data where to search for the face.
         downSampleRatio: float
@@ -177,12 +164,14 @@ class FaceData:
         """
 
         # Initialize the detector and predictor if needed
-        if FaceData._detector is None or FaceData._predictor is None:
-            FaceData._detector = dlib.get_frontal_face_detector()
+        if Face._detector is None or Face._predictor is None:
+            Face._detector = dlib.get_frontal_face_detector()
             
-            modulePath = os.path.dirname(os.path.abspath(__file__))
-            faceModel = '{}/face_model.dat'.format(modulePath)
-            FaceData._predictor = dlib.shape_predictor(faceModel)
+            modulePath = os.path.dirname(__file__)
+            faceModel = os.path.abspath('{}/../models/face_model.dat' \
+                            .format(modulePath))
+            print('faceModel = {}'.format(faceModel))
+            Face._predictor = dlib.shape_predictor(faceModel)
 
         # Ignore all black images
         if cv2.countNonZero(image[:,:,0]) == 0:
@@ -197,10 +186,10 @@ class FaceData:
             detImage = image
         
         # Detect faces in the image
-        # (the 1 in the call to FaceData._detector indicates the number of up
+        # (the 1 in the call to Face._detector indicates the number of up
         # samples performed before the detection - refer to dlib's documentation
         # for details)
-        detectedFaces = FaceData._detector(detImage, 1)
+        detectedFaces = Face._detector(detImage, 1)
         if len(detectedFaces) == 0:
             return False
 
@@ -218,14 +207,14 @@ class FaceData:
                                 
         # Fit the shape model over the biggest face region to predict the
         # positions of its facial landmarks
-        faceShape = FaceData._predictor(image, region)
+        faceShape = Face._predictor(image, region)
 
         # Update the object data with the predicted landmark positions and
         # their bounding box (with a small margin of 10 pixels)
-        self.points = [(p.x, p.y) for p in faceShape.parts()]
+        self.landmarks = np.array([[p.x, p.y] for p in faceShape.parts()])
         
         margin = 10
-        x, y, w, h = cv2.boundingRect(np.array(self.points))
+        x, y, w, h = cv2.boundingRect(self.landmarks)
         self.region = (
                        max(x - margin, 0),
                        max(y - margin, 0),
@@ -234,6 +223,48 @@ class FaceData:
                       )
 
         return True
+    
+    #---------------------------------------------
+    def crop(self, image):
+        """
+        Crops the given image according to the face region and landmarks.
+        
+        This function creates a subregion of the original image according to the
+        face region coordinates, and also a new instance of Face object with the 
+        region and landmarks adjusted to the cropped image.
+        
+        Parameters
+        ----------
+        image: numpy.array
+            Image that contains the face.
+            
+        Returns
+        -------
+        croppedImage: numpy.array
+            Subregion in the original image that contains only the face. This
+            image is shared with the original image (i.e. its data is not 
+            copied, and changes to either the original image or this subimage
+            will affect both instances).
+            
+        adjustedFace: Face
+            New instance of Face with the face region and landmarks adjusted to
+            the croppedImage.
+        """
+        
+        left = self.region[0]
+        top = self.region[1]
+        right = self.region[2]
+        bottom = self.region[3]
+        
+        croppedImage = image[top:bottom+1, left:right+1]
+        
+        adjustedFace = Face()
+        adjustedFace.region = (0, 0, right - left, bottom - top)
+        adjustedFace.landmarks = np.array([[p[0] - left, p[1] - top]
+                                            for p in self.landmarks
+                                         ])
+        
+        return croppedImage, adjustedFace
     
     #---------------------------------------------
     def draw(self, image, drawRegion = None, drawFaceModel = None):
@@ -248,8 +279,6 @@ class FaceData:
         
         Parameters
         ------
-        self: FaceData
-                Instance of the FaceData object. 
         image: numpy.array
             Image data where to draw the face data.
         drawRegion: bool
@@ -263,13 +292,13 @@ class FaceData:
         ------
         drawnImage: numpy.array
             Image data with the original image received plus the face data
-            drawn. If this instance of FaceData is empty (i.e. it has no region
-            and no landmark points), the original image is simply returned with
+            drawn. If this instance of Face is empty (i.e. it has no region
+            and no landmarks), the original image is simply returned with
             nothing drawn on it.
         """
 
         if self.isEmpty():
-            print('Can not draw the contents of an empty FaceData object')
+            print('Can not draw the contents of an empty Face object')
             return image
         
         # Check default arguments
@@ -287,22 +316,22 @@ class FaceData:
         # Draw the positions of landmarks
         color = (0, 0, 255)
         for i in range(68):
-            cv2.circle(image, self.points[i], 1, color, 2)
+            cv2.circle(image, tuple(self.landmarks[i]), 1, color, 2)
             
         # Draw the face model if requested
         if drawFaceModel:
             color = (255,0, 255)
-            p = np.int32(self.points)
+            p = self.landmarks
             
-            cv2.polylines(image, [p[FaceData._jawLine]], False, color, 2)
-            cv2.polylines(image, [p[FaceData._leftEyebrow]], False, color, 2)
-            cv2.polylines(image, [p[FaceData._rightEyebrow]], False, color, 2)
-            cv2.polylines(image, [p[FaceData._noseBridge]], False, color, 2)
-            cv2.polylines(image, [p[FaceData._lowerNose]], True, color, 2)
-            cv2.polylines(image, [p[FaceData._leftEye]], True, color, 2)
-            cv2.polylines(image, [p[FaceData._rightEye]], True, color, 2)
-            cv2.polylines(image, [p[FaceData._outerLip]], True, color, 2)
-            cv2.polylines(image, [p[FaceData._innerLip]], True, color, 2)
+            cv2.polylines(image, [p[Face._jawLine]], False, color, 2)
+            cv2.polylines(image, [p[Face._leftEyebrow]], False, color, 2)
+            cv2.polylines(image, [p[Face._rightEyebrow]], False, color, 2)
+            cv2.polylines(image, [p[Face._noseBridge]], False, color, 2)
+            cv2.polylines(image, [p[Face._lowerNose]], True, color, 2)
+            cv2.polylines(image, [p[Face._leftEye]], True, color, 2)
+            cv2.polylines(image, [p[Face._rightEye]], True, color, 2)
+            cv2.polylines(image, [p[Face._outerLip]], True, color, 2)
+            cv2.polylines(image, [p[Face._innerLip]], True, color, 2)
         
         return image
         
@@ -316,10 +345,8 @@ class FaceData:
         
         Parameters
         ------
-        self: FaceData
-                Instance of the FaceData object.
         filename: str
-            Path and name of the CSV file to create with the FaceData data.
+            Path and name of the CSV file to create with the Face data.
         confirmOverwrite: bool
             Indicates if the filename should be automatically overwritten in
             case it already exists. If this argument is false, the user will be
@@ -334,7 +361,7 @@ class FaceData:
         """
 
         if self.isEmpty():
-            print('Can not save an empty FaceData object')
+            print('Can not save an empty Face object')
             return False
         
         # Check default arguments
@@ -364,14 +391,14 @@ class FaceData:
         # Write the header
         header = ['face.left', 'face.top', 'face.right', 'face.bottom']
         for i in range(68):
-            point = self.points[i]
+            point = self.landmarks[i]
             header.append('mark{:02d}.x'.format(i))
             header.append('mark{:02d}.y'.format(i))
         writer.writerow(header)
             
         # Write the positions of the landmarks
         row = [self.region[0], self.region[1], self.region[2], self.region[3]]
-        for point in self.points:
+        for point in self.landmarks:
             row.append(point[0])
             row.append(point[1])
         writer.writerow(row)
@@ -389,8 +416,6 @@ class FaceData:
         
         Parameters
         ------
-        self: FaceData
-                Instance of the FaceData object.
         filename: str
             Path and name of the CSV file to read the face data from.
             
@@ -429,186 +454,5 @@ class FaceData:
                 
         self.region = [int(i) for i in row[0:4]]
         it = iter([int(i) for i in row[4:]])
-        self.points = list(zip(it, it))
-        return True
-    
-#=============================================
-class FaceDataSet:
-    """
-    Represents a set of faces found the frames of a video.
-    """
-    
-    #---------------------------------------------
-    def __init__(self):
-        """
-        Class constructor.
-        
-        Parameters
-        ------
-        self: FaceDataSet
-            Instance of the FaceDataSet object.
-        """
-        
-        self.faces = {}
-        """
-        A dictionary containing the FaceData instances of the faces found in
-        each frame of the video. The dictionary key is the frame number (int)
-        and the dictionary value is the instance of FaceData class with the
-        face found in that frame: {'<frame number>': <instance of
-        FaceData>}
-        """
-        
-    #---------------------------------------------        
-    def isEmpty(self):
-        """
-        Check if the FaceDataSet object is empty.
-        
-        An empty FaceDataSet object have no faces. Simple as that.
-        
-        Parameters
-        ------        
-        self: FaceDataSet
-            Instance of the FaceDataSet object.
-        
-        Returns
-        ------
-        response: bool
-            Indication on whether this object is empty.
-        """
-        
-        return True if len(self.faces) == 0 else False
-        
-    #---------------------------------------------
-    def save(self, filename, confirmOverwrite = None):
-        """
-        Saves the face data set to the given CSV file.
-        
-        Saves the contents of this instance to the given text file in CSV
-        (Comma-Separated Values) format.
-        
-        Parameters
-        ------
-        self: FaceDataSet
-                Instance of the FaceDataSet object.
-        filename: str
-            Path and name of the CSV file to create with the FaceDataSet data.
-        confirmOverwrite: bool
-            Indicates if the filename should be automatically overwritten in
-            case it already exists. If this argument is false, the user will be
-            requested to confirm overwriting if the file already exists. The
-            default is False.
-            
-        Returns
-        ------
-        completion: bool
-            Indication if the saving was completed or not. In case of errors,
-            the method itself will output the proper error messages.
-        """
-
-        if self.isEmpty():
-            print('Can not save an empty FaceDataSet object')
-            return False
-        
-        # Check default arguments
-        if confirmOverwrite is None:
-            confirmOverwrite = False
-        
-        # Check existing file should be overwritten
-        if not confirmOverwrite:
-            if os.path.isfile(filename):
-                print('The file {} already exists. Do you want to overwrite '
-                      'it? ([y]es/[n]o)'.format(filename))
-                answer = getChar().lower()
-                if answer == 'n':
-                    print('Operation cancelled by the user')
-                    return False
-        
-        # Open the file for writing
-        try:
-            file = open(filename, 'w', newline='')
-        except IOError as e:
-            print('Could not write to file {}'.format(filename))
-            return False
-            
-        writer = csv.writer(file, delimiter=',', quotechar='"',
-                            quoting=csv.QUOTE_MINIMAL)
-            
-        # Write the header
-        header = ['frame.number', 'face.left', 'face.top', 'face.right',
-                  'face.bottom']
-        for i in range(68):
-            header.append('mark{:02d}.x'.format(i))
-            header.append('mark{:02d}.y'.format(i))
-        writer.writerow(header)
-            
-        # Write the faces
-        for numFrame, face in self.faces.items():
-            row = [numFrame, face.region[0], face.region[1], face.region[2],
-                             face.region[3]]
-            for point in face.points:
-                row.append(point[0])
-                row.append(point[1])
-            writer.writerow(row)
-        
-        file.close()
-        return True
-
-    #---------------------------------------------
-    def read(self, filename):
-        """
-        Reads the face data set from the given CSV file.
-        
-        Reads the contents of this instance from the given text file in CSV
-        (Comma-Separated Values) format.
-        
-        Parameters
-        ------
-        self: FaceDataSet
-                Instance of the FaceDataSet object.
-        filename: str
-            Path and name of the CSV file to read the face data set from.
-            
-        Returns
-        ------
-        completion: bool
-            Indication if the reading was completed or not. In case of errors,
-            the method itself will output the proper error messages.
-        """
-        
-        # Open the file for reading and read all lines
-        try:
-            file = open(filename, 'r', newline='')
-        except IOError as e:
-            print('Could not read from file {}'.format(filename))
-            return False
-            
-        rows = list(csv.reader(file, delimiter=',', quotechar='"',
-                            quoting=csv.QUOTE_MINIMAL))
-        file.close()
-            
-        # Verify and import the content
-        # This file is supposed to have many rows (the header and a row of data
-        # for each frame where a face was detected)
-        if len(rows) < 2:
-            print('The CSV file {} has a different number of lines than expected'
-                  .format(filename))
-            return False
-
-        # Each row is also supposed to have 140 columns (4 regions + 2 * 68
-        # coordinates - x and y)            
-        faces = {}
-        for row in rows[1:]:
-            if len(row) != 141:
-                print('The CSV file {} has a different format than expected'
-                      .format(filename))
-                return False
-                    
-            numFrame = int(row[0])
-            face = FaceData()
-            face.region = [int(i) for i in row[1:5]]
-            it = iter([int(i) for i in row[5:]])
-            face.points = list(zip(it, it))
-            faces[numFrame] = face
-            
-        self.faces = faces
+        self.landmarks = np.array(list(zip(it, it)))
         return True

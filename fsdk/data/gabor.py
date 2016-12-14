@@ -166,7 +166,7 @@ class GaborBank:
             
         Returns
         -------
-        responses: list
+        responses: numpy.array
             List of the responses of the filtering with the Gabor kernels. The
             responses are the magnitude of both the real and imaginary parts of
             the convolution with each kernel, hence this list dimensions are the
@@ -197,7 +197,7 @@ class GaborBank:
                 
                 responses.append(mag)
                 
-        return responses
+        return np.array(responses)
                 
     #---------------------------------------------
     def createPlotFigure(self):
