@@ -59,14 +59,14 @@ class ClosedEyesDetector:
         Support Vector Machine with linear kernel used as the model for the
         detection of closed eyes in face images.
         """
-        
+
         modulePath = os.path.dirname(__file__)
         self._modelFile = os.path.abspath('{}/../models/closed_eyes_model.dat' \
                             .format(modulePath))
         """
         Name of the file used to persist the model in the disk.
         """
-        
+
         # Load the model from the disk, if its file exists
         if os.path.isfile(self._modelFile):
             if not self.load():
@@ -145,9 +145,30 @@ class ClosedEyesDetector:
 
         # Reshape the bidimensional matrix to a single dimension (i.e. a list
         # of values)
-        featureVector = list(np.reshape(responses, -1))
+        featureVector = responses.reshape(-1).tolist()
 
         return featureVector
+
+    #---------------------------------------------
+    def eyesClosed(self, featureVector):
+        """
+        Predicts if the eyes are closed on the given features.
+
+        Parameters
+        ----------
+        featureVector: list
+            A list of values in range [-1, 1] with the responses of Gabor
+            kernels applied to an image and collected at the facial landmarks of
+            the eyes. These features should be separated from all the responses
+            using the method `relevantFeatures()`.
+
+        Returns
+        -------
+        eyesClosed: bool
+            Indication if the eyes are closed or not.
+        """
+
+        return (self._clf.predict([featureVector]) == 1)
 
     #---------------------------------------------
     def extractFeatures(self, args):
@@ -275,10 +296,10 @@ class ClosedEyesDetector:
             responses = bank.filter(image)
 
             # Get only the features relevant for this model
-            responses = self.relevantFeatures(responses, face.landmarks)
+            features = self.relevantFeatures(responses, face.landmarks)
 
             # Save the features to the CSV file
-            row = [sampleName] + responses + [label]
+            row = [sampleName] + features + [label]
             writer.writerow(row)
 
         ui.printProgress(total, total, '', barLength=100)
@@ -288,9 +309,13 @@ class ClosedEyesDetector:
                 .format(total - len(ignoredFiles), args.featuresFile))
 
         if len(ignoredFiles) > 0:
-            print('The following image files were ignored because they could '
-                  'not be read or no face was detected in them:')
-            print(', '.join(ignoredFiles))
+            print('Some image files were ignored because they could not be read'
+                  ' or no face was detected in them. The list of such files '
+                  'was saved to file ignored_files.txt')
+
+            ignoredFiles = ['The following image files were ignored:'] \
+                             + ignoredFiles
+            np.savetxt('ignored_files.txt', ignoredFiles, fmt='%s')
 
         return 0
 
@@ -448,12 +473,12 @@ if __name__ == '__main__':
     trParser = subparser.add_parser(name='trainModel',
                                     help='Trains the model with the given '
                                          'features data.')
-                                         
+
     trParser.add_argument('featuresFile',
                           help='Name of the CSV file with the features data '
                           'to use in training.'
                          )
-                                         
+
     args = parser.parse_args()
 
     if args.subParser is None:
