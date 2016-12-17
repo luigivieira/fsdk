@@ -37,7 +37,7 @@ if __name__ == '__main__':
 
 from fsdk.data.faces import Face
 from fsdk.data.gabor import GaborBank
-from fsdk.classifiers.closed_eyes import ClosedEyesDetector
+from fsdk.classifiers.blinking import BlinkingDetector
 
 #---------------------------------------------
 def main(argv):
@@ -70,14 +70,27 @@ def main(argv):
     # Bank of Gabor kernels used for feature extraction
     bank = GaborBank()
 
-    # Classifiers used for prediction/detection
-    ceDetector = ClosedEyesDetector()
+    # Detector of blinking
+    blinkingDetector = BlinkingDetector()
+
+    # Features of the eyes
+    eyeFeatures = Face._leftEye + Face._rightEye
+
+    # Text settings
+    fontFace = cv2.FONT_HERSHEY_SIMPLEX
+    fontScale = 1
+    thickness = 1
+    color = (255, 255, 255)
+
+    paused = False
 
     # Process the video input
     while True:
-        ret, frame = video.read()
-        if not ret:
-            break
+
+        if not paused:
+            ret, frame = video.read()
+            if not ret:
+                break
 
         start = datetime.now()
 
@@ -90,20 +103,46 @@ def main(argv):
             croppedFrame, croppedFace = face.crop(frame)
 
             # Filter the face with the bank of Gabor kernels
-            responses = bank.filter(croppedFrame)
+            #responses = bank.filter(croppedFrame)
 
-            # Detect the closed eyes
-            landmarks = croppedFace.landmarks
-            eyesFeatures = ceDetector.relevantFeatures(responses, landmarks)
+            # Draw information on the eyes being closed or opened
+            #x = face.region[0]
+            #y = face.region[1] - 20
 
-            if ceDetector.eyesClosed(eyesFeatures):
-                print('eyes: CLOSED')
+            #if ceDetector.eyesClosed(eyeResponses):
+            #    cv2.putText(frame, 'CLOSED', (x, y),
+            #                fontFace, fontScale, (0, 0, 255), thickness)
+            #else:
+            #    cv2.putText(frame, 'OPENED', (x, y),
+            #                fontFace, fontScale, color, thickness)
+
+            b = blinkingDetector.isBlinking(croppedFrame, croppedFace)
+            if b:
+                text = '[-----]'
+                color = (0, 0, 255)
             else:
-                print('eyes: OPENED')
+                text = '[     ]'
+                color = (255, 255, 255)
+
+            textSize, _ = cv2.getTextSize(text, fontFace, fontScale, thickness)
+            cv2.putText(frame, text,
+                         (frame.shape[1] // 2 - textSize[0] // 2, textSize[1]),
+                         fontFace, fontScale, color, thickness)
 
             #frame = face.draw(frame)
         else:
-            pass # Print information of 'no face detected'
+            text = 'No Face Detected!'
+            textSize, _ = cv2.getTextSize(text, fontFace, fontScale, thickness)
+            cv2.putText(frame, text,
+                         (frame.shape[1] // 2 - textSize[0] // 2, textSize[1]),
+                         fontFace, fontScale, (0, 0, 255), thickness)
+
+        text = 'Press \'q\' to quit'
+        textSize, _ = cv2.getTextSize(text, fontFace, fontScale, thickness)
+        cv2.putText(frame, text,
+                    (frame.shape[1] // 2 - textSize[0] // 2,
+                     frame.shape[0]-textSize[1]),
+                    fontFace, fontScale, color, thickness)
 
         cv2.imshow('Video', frame)
 
@@ -111,22 +150,15 @@ def main(argv):
         delta = (end - start)
         delay = int(max(1, ((1 / fps) - delta.total_seconds()) * 1000))
 
-        if cv2.waitKey(delay) & 0xFF == ord('q'):
+        key = cv2.waitKey(delay)
+
+        if key & 0xFF == ord('q'):
             break
+        elif key & 0xFF == ord('p'):
+            paused = not paused
 
     video.release()
     cv2.destroyAllWindows()
-
-def teste(frame, landmarks):
-    eyeFeatures = Face._leftEye + Face._rightEye
-    eyeLandmarks = landmarks[eyeFeatures]
-    x,y,w,h = cv2.boundingRect(eyeLandmarks)
-    eyes = frame[y:y+h+1, x:x+w+1]
-
-    eyes = cv2.Canny(eyes, 85, 170)
-
-    cv2.namedWindow('Eyes', cv2.WINDOW_AUTOSIZE)
-    cv2.imshow('Eyes', eyes)
 
 #---------------------------------------------
 def parseCommandLine(argv):
