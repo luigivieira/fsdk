@@ -87,6 +87,26 @@ class Face:
     Indexes of the landmarks at the left eye
     """
 
+    _rightUpperEyelid = [37, 38]
+    """
+    Indexes of the landmarks at the upper eyelid of the right eye
+    """
+
+    _rightLowerEyelid = [41, 40]
+    """
+    Indexes of the landmarks at the lower eyelid of the right eye
+    """
+
+    _leftUpperEyelid = [43, 44]
+    """
+    Indexes of the landmarks at the upper eyelid of the left eye
+    """
+
+    _leftLowerEyelid = [47, 46]
+    """
+    Indexes of the landmarks at the lower eyelid of the left eye
+    """
+
     _outerLip = [i for i in range(48,60)]
     """
     Indexes of the landmarks at the outer lip

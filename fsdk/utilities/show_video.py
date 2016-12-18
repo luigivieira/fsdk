@@ -83,6 +83,7 @@ def main(argv):
     color = (255, 255, 255)
 
     paused = False
+    blinks = 0
 
     # Process the video input
     while True:
@@ -116,20 +117,23 @@ def main(argv):
             #    cv2.putText(frame, 'OPENED', (x, y),
             #                fontFace, fontScale, color, thickness)
 
-            b = blinkingDetector.isBlinking(croppedFrame, croppedFace)
+            b = blinkingDetector.isBlinking(croppedFace.landmarks)
             if b:
-                text = '[-----]'
-                color = (0, 0, 255)
-            else:
-                text = '[     ]'
-                color = (255, 255, 255)
+                blinks += 1
 
+            text = 'Blinks: {:d}'.format(blinks)
             textSize, _ = cv2.getTextSize(text, fontFace, fontScale, thickness)
             cv2.putText(frame, text,
                          (frame.shape[1] // 2 - textSize[0] // 2, textSize[1]),
                          fontFace, fontScale, color, thickness)
 
             #frame = face.draw(frame)
+            for p1,p2 in zip(face.landmarks[Face._rightUpperEyelid + Face._leftUpperEyelid], face.landmarks[Face._rightLowerEyelid + Face._leftLowerEyelid]):
+                cv2.circle(frame, tuple(p1), 1, (0, 0, 255), 2)
+                cv2.circle(frame, tuple(p2), 1, (0, 0, 255), 2)
+
+                cv2.line(frame, tuple(p1), tuple(p2), (255, 255, 255), 1)
+
         else:
             text = 'No Face Detected!'
             textSize, _ = cv2.getTextSize(text, fontFace, fontScale, thickness)

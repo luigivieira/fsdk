@@ -46,17 +46,13 @@ class BlinkingDetector:
         Class constructor.
         """
 
-        self._lastFace = None
-        self._frame = 0
-        self._history = []
-        self._file = open('history.csv', 'w')
-        self._file.write('frame,measure\n')
-
-    def __del__(self):
-        self._file.close()
+        self._landmarks = None
+        """
+        Landmarks of the face in the last frame processed.
+        """
 
     #---------------------------------------------
-    def isBlinking(self, image, face):
+    def isBlinking(self, landmarks):
         """
         Bla ble
 
@@ -66,40 +62,82 @@ class BlinkingDetector:
             Indication on if the saving was succeeded or not.
         """
 
-        if self._lastFace is None:
-            self._lastFace = face
+        # Check if this is the first time the detector is used (if it is, save
+        # the landmarks to compare in the next frame and assume no blinking)
+        if self._landmarks is None:
+            self._landmarks = landmarks
             return False
+        
+        # Check if it has been enough movement in the eye features to indicate a
+        # possible blink
+        if not self._movementThreshold(landmarks) < 6:
+            self._landmarks = landmarks
+            return False
+
+        ######################################
+        # If this point is reached, there has been movement in the eyelids
+        # So, we check if the vertical displacement (downwards) was big enough
+        # (this second check prevents false positives from head )
+        ######################################
+            
+        # Get the landmarks of the upper and lower eyelids of both eyes
+        upperEyelid = Face._rightUpperEyelid + Face._leftUpperEyelid
+        lowerEyelid = Face._rightLowerEyelid + Face._leftLowerEyelid
+
+        # Calculate the average distance of upper and lower eyelids of both eyes
+        # in the last frame
+        lastDistance = 0
+        for p1, p2 in zip(self._landmarks[upperEyelid],
+                          self._landmarks[lowerEyelid]):
+            lastDistance += np.linalg.norm(p2 - p1)
+        lastDistance //= len(self._landmarks[upperEyelid])
+        
+        # Calculate the average distance of upper and lower eyelids of both eyes
+        # in the current frame
+        distance = 0
+        for p1, p2 in zip(landmarks[upperEyelid],
+                          landmarks[lowerEyelid]):
+            distance += np.linalg.norm(p2 - p1)
+        distance //= len(landmarks[upperEyelid])
+
+        # Calculate the displacement of eyelids between the last and the
+        # current frame
+        displacement = int(distance - lastDistance)
+        self._lastDistance = distance
+        self._landmarks = landmarks
+
+        # A blinking is considered to happen if the displacement is negative
+        # (i.e. it occurred downwards) and it is smaller (bigger, in absolute
+        # terms) than a threshold
+        if displacement < -2:
+            return True
         else:
+            return False
+            
+    #---------------------------------------------
+    def _movementThreshold(self, landmarks):
+    
+        # Calculate the average displacement of all the eye features from the
+        # last frame
+        eyeFeatures = Face._leftEye + Face._rightEye
+        totalDisp = 0
+        for feature in eyeFeatures:
+            d = np.linalg.norm(landmarks[feature] - self._landmarks[feature])
+            totalDisp += d
+        eyeDisplacement = totalDisp / len(eyeFeatures)
 
-            # Calculate the averages of how much each of two groups of features
-            # (eyes vs fixed face features) moved from the last frame
-            eyeFeatures = Face._leftEye + Face._rightEye
-            totalDisp = 0
-            for feature in eyeFeatures:
-                d = np.linalg.norm(face.landmarks[feature] - self._lastFace.landmarks[feature])
-                totalDisp += d
-            eyeDisplacement = totalDisp / len(eyeFeatures)
+        # Calculate the average displacement of all the nose features from the
+        # last frame
+        noseFeatures = Face._noseBridge + Face._lowerNose
+        totalDisp = 0
+        for feature in noseFeatures:
+            d = np.linalg.norm(landmarks[feature] - self._landmarks[feature])
+            totalDisp += d
+        noseDisplacement = totalDisp / len(noseFeatures)
 
-            otherFeatures = Face._jawLine + Face._noseBridge + Face._lowerNose
-            totalDisp = 0
-            for feature in otherFeatures:
-                d = np.linalg.norm(face.landmarks[feature] - self._lastFace.landmarks[feature])
-                totalDisp = d
-            otherDisplacement = totalDisp / len(otherFeatures)
-
-            # Check if the eye features moved more than the other features
-            measure = abs(eyeDisplacement - otherDisplacement)
-
-            # DEBUG
-            print('#{:d}: {:.2f}'.format(self._frame, measure))
-            self._file.write('{:d},{:.2f}\n'.format(self._frame, measure))
-            self._frame += 1
-            # DEBUG
-
-            self._lastFace = face
-
-            height = face.region[2] - face.region[0]
-            if measure > 5:
-                return True
-            else:
-                return False
+        # Calculate the absolute difference of movement in those two groups.
+        # Since the nose features are fixed on the face, a big difference in
+        # this measurement indicates a possible blink
+        threshold = abs(eyeDisplacement - noseDisplacement)
+        
+        return threshold
