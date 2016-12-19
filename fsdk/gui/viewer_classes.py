@@ -70,12 +70,12 @@ class MainWindow(QMainWindow):
         
         self._helpAbout = self._helpMenu.addAction(self.tr('&About...'))
         self._helpAbout.triggered.connect(self._showAbout)
+
+        self._video = VideoWidget(self)
+        self.setCentralWidget(self._video)
         
-        surface = VideoSurface(self)
         player = QMediaPlayer(self)        
-        player.setVideoOutput(surface)
-        
-        self.setCentralWidget(surface._label)
+        player.setVideoOutput(self._video._surface)
         
         player.setMedia(QMediaContent(QUrl.fromLocalFile('c://temp//SOPT//What_is_Fire_.mp4')))
         player.play()
@@ -177,7 +177,7 @@ class AboutWindow(QDialog):
         self.move(x, y)
 
 #=============================================
-class VideoSurface(QAbstractVideoSurface):
+class VideoWidget(QWidget):
     """
     Implements a video displayer that allows processing frames with OpenCV.
     """
@@ -193,32 +193,160 @@ class VideoSurface(QAbstractVideoSurface):
             Parent widget. The default is None.
         """        
         super().__init__(parent)
+        
+        self.setAutoFillBackground(False)
+        self.setAttribute(Qt.WA_NoSystemBackground, True)
+        self.setAttribute(Qt.WA_PaintOnScreen, True)
+
+        palette = self.palette()
+        palette.setColor(QPalette.Background, Qt.black)
+        self.setPalette(palette)
+
+        self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
+
+        self._surface = VideoSurface(self)
+        
+    #---------------------------------------------
+    def sizeHint(self):
+        return self._surface.surfaceFormat().sizeHint()
+
+    #---------------------------------------------
+    def paintEvent(self, event):
+        painter = QPainter(self)
+
+        if self._surface.isActive():
+            videoRect = self._surface.videoRect()
+
+            if not videoRect.contains(event.rect()):
+                region = event.region()                
+
+                brush = self.palette().window()
+
+                for rect in region.rects():
+                    painter.fillRect(rect, brush)
+
+            self._surface.paint(painter)
+        else:
+            painter.fillRect(event.rect(), self.palette().window())
+
+    #---------------------------------------------
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._surface.updateVideoRect()
+        
+#=============================================
+class VideoSurface(QAbstractVideoSurface):
+    """
+    Implements a video displayer that allows processing frames with OpenCV.
+    """
+    
+    #---------------------------------------------
+    def __init__(self, parent):
+        """
+        Class constructor.
+        
+        Parameters
+        ----------
+        parent: QWidget
+            Parent widget, which will also draw the video output produced by 
+            this surface.
+        """        
+        super().__init__(parent)
                 
-        self._label = QLabel()
+        self._widget = parent
+        self._imageFormat = QImage.Format_Invalid
+        self._targetRect = None
+        self._imageSize = None
+        self._sourceRect = None
+        self._currentFrame = None
         
     #---------------------------------------------
     def supportedPixelFormats(self, handleType = QAbstractVideoBuffer.NoHandle):
         if handleType == QAbstractVideoBuffer.NoHandle:
-            return [QVideoFrame.Format_BGR24]
+            return [QVideoFrame.Format_RGB32,
+                    QVideoFrame.Format_ARGB32,
+                    QVideoFrame.Format_ARGB32_Premultiplied,
+                    QVideoFrame.Format_RGB565,
+                    QVideoFrame.Format_RGB555]
         else:
             return []
+            
+    #---------------------------------------------
+    def isFormatSupported(self, format, similar):
+        imageFormat = QVideoFrame.imageFormatFromPixelFormat(format.pixelFormat())
+        size = format.frameSize()
+
+        return imageFormat != QImage.Format_Invalid and \
+             not size.isEmpty() and \
+             format.handleType() == QAbstractVideoBuffer.NoHandle
+
+    #---------------------------------------------
+    def videoRect(self):
+        return self._targetRect
+             
+    #---------------------------------------------
+    def start(self, format):
+        imageFormat = QVideoFrame.imageFormatFromPixelFormat(format.pixelFormat())
+        size = format.frameSize()
+
+        if imageFormat != QImage.Format_Invalid and not size.isEmpty():
+            self._imageFormat = imageFormat
+            self._imageSize = size
+            self._sourceRect = format.viewport()
+
+            super().start(format)
+
+            self._widget.updateGeometry()
+            self.updateVideoRect()
+
+            return True
+        else:
+            return False
+
+    #---------------------------------------------
+    def stop(self):
+        self._currentFrame = QVideoFrame()
+        self._targetRect = QRect()
+        super().stop()
+        self._widget.update()
 
     #---------------------------------------------
     def present(self, frame):
-    
-        print('1')
-    
-        if frame.pixelFormat() != QVideoFrame.Format_BGR24:
-            print('Invalid pixel format: {}'.format(frame.pixelFormat()))
+        if self.surfaceFormat().pixelFormat() != frame.pixelFormat() or \
+           self.surfaceFormat().frameSize() != frame.size():
+            setError(IncorrectFormatError)
+            stop()
             return False
+        else:
+            self._currentFrame = frame
+            self._widget.repaint(self._targetRect)
+            return True
 
-        image = QImage(frame.bits(), frame.width(), frame.height(),
-                       frame.bytesPerLine(), QImage.Format_RGB444)
+    #---------------------------------------------
+    def updateVideoRect(self):
+        size = self.surfaceFormat().sizeHint()
+        size.scale(self._widget.size().boundedTo(size), Qt.KeepAspectRatio)
 
-        print(image.size().width())
-        self._label.resize(image.size())
+        self._targetRect = QRect(QPoint(0, 0), size)
+        self._targetRect.moveCenter(self._widget.rect().center())
 
-        self._label.setPixmap(QPixmap.fromImage(image))
-        self._label.update()
-        
-        return True
+    #---------------------------------------------
+    def paint(self, painter):
+        print('1')
+        if self._currentFrame.map(QAbstractVideoBuffer.ReadOnly):
+            oldTransform = painter.transform()
+
+            if self.surfaceFormat().scanLineDirection() == QVideoSurfaceFormat.BottomToTop:
+                painter.scale(1, -1)
+                painter.translate(0, -self._widget.height())
+
+            image = QImage(self._currentFrame.bits(),
+                           self._currentFrame.width(),
+                           self._currentFrame.height(),
+                           self._currentFrame.bytesPerLine(),
+                           self._imageFormat);
+
+            painter.drawImage(self._targetRect, image, self._sourceRect)
+            painter.setTransform(oldTransform);
+
+            self._currentFrame.unmap()
