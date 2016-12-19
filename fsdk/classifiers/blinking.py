@@ -39,7 +39,14 @@ class BlinkingDetector:
         """
         Class constructor.
         """
-        
+
+        self.detections = []
+        """
+        List of frames (their numbers) in which blink detections occurred. This
+        is kept in order to allow calculating the average blinking per minute
+        rate.
+        """
+    
         self._landmarks = None
         """
         Landmarks of the face in the last frame processed. This is used for
@@ -55,10 +62,46 @@ class BlinkingDetector:
         """
 
     #---------------------------------------------
-    def detect(self, face):
+    def getBlinkingRate(self, elapsedFrames, fps):
         """
-        Detects the blinking of both eyes in the given frame
+        Calculates the blinking rate (blinks per minute).
+        
+        Parameters
+        ----------
+        elapsedFrames: int
+            Number of elapsed frames in the video being processed.
+        fps: int
+            Frame rate in frames per second in which the video has been
+            recorded.
+            
+        Returns
+        -------
+        rate: float
+            Blinking rate in blinks per minute.
+        """
+        
+        if elapsedFrames == 0:
+            return 0
+        
+        # Calculate the elapsed time, in seconds
+        elapsedTime = elapsedFrames / fps
+        
+        # Calculate the blinking rate, in minutes
+        rate = len(self.detections) / elapsedTime / 60
+        
+        return rate
+        
+    #---------------------------------------------
+    def detect(self, frameNum, face):
+        """
+        Detects the blinking (both eyes) in the given frame.
 
+        Parameters
+        ----------
+        face: Face
+            Face object with the face landmarks and region detected on the
+            current frame.
+        
         Returns
         -------
         ret: bool
@@ -128,6 +171,7 @@ class BlinkingDetector:
         # A blinking is considered to happen if the displacement is negative
         # (i.e. it occurred downwards) and bellow a threshold
         if displacement < -blinkingThreshold:
+            self.detections.append(frameNum) # Update the list of detections
             self._lastResponse = True
         else:
             self._lastResponse = False

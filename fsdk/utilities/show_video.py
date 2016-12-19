@@ -84,78 +84,82 @@ def main(argv):
 
     paused = False
     blinks = 0
+    frameNum = -1
 
     # Process the video input
     while True:
 
+        start = datetime.now()
+    
         if not paused:
             ret, frame = video.read()
             if not ret:
                 break
+            frameNum +=1
 
-        start = datetime.now()
+            face = Face()
+            face.detect(frame, 4)
 
-        face = Face()
-        face.detect(frame, 4)
+            if not face.isEmpty():
 
-        if not face.isEmpty():
+                # Crop only the face region
+                croppedFrame, croppedFace = face.crop(frame)
 
-            # Crop only the face region
-            croppedFrame, croppedFace = face.crop(frame)
+                # Filter the face with the bank of Gabor kernels
+                #responses = bank.filter(croppedFrame)
 
-            # Filter the face with the bank of Gabor kernels
-            #responses = bank.filter(croppedFrame)
+                # Draw information on the eyes being closed or opened
+                #x = face.region[0]
+                #y = face.region[1] - 20
 
-            # Draw information on the eyes being closed or opened
-            #x = face.region[0]
-            #y = face.region[1] - 20
+                #if ceDetector.eyesClosed(eyeResponses):
+                #    cv2.putText(frame, 'CLOSED', (x, y),
+                #                fontFace, fontScale, (0, 0, 255), thickness)
+                #else:
+                #    cv2.putText(frame, 'OPENED', (x, y),
+                #                fontFace, fontScale, color, thickness)
 
-            #if ceDetector.eyesClosed(eyeResponses):
-            #    cv2.putText(frame, 'CLOSED', (x, y),
-            #                fontFace, fontScale, (0, 0, 255), thickness)
-            #else:
-            #    cv2.putText(frame, 'OPENED', (x, y),
-            #                fontFace, fontScale, color, thickness)
+                b = blinkingDetector.detect(frameNum, croppedFace)
+                if b:
+                    blinks += 1
 
-            b = blinkingDetector.detect(croppedFace)
-            if b:
-                blinks += 1
+                bpm = blinkingDetector.getBlinkingRate(frameNum+1, fps)
+                text = 'Blinks: {:d} (per minute: {:.7f})'.format(blinks, bpm)
+                textSize, _ = cv2.getTextSize(text, fontFace, fontScale,
+                                                thickness)
+                x = frame.shape[1] // 2 - textSize[0] // 2
+                y = textSize[1]
+                cv2.putText(frame, text, (x, y), fontFace, fontScale, color,
+                             thickness)
 
-            text = 'Blinks: {:d}'.format(blinks)
+                #frame = face.draw(frame)
+                for p1,p2 in zip(face.landmarks[Face._rightUpperEyelid + Face._leftUpperEyelid], face.landmarks[Face._rightLowerEyelid + Face._leftLowerEyelid]):
+                    cv2.circle(frame, tuple(p1), 1, (0, 0, 255), 2)
+                    cv2.circle(frame, tuple(p2), 1, (0, 0, 255), 2)
+
+                    cv2.line(frame, tuple(p1), tuple(p2), (255, 255, 255), 1)
+
+            else:
+                text = 'No Face Detected!'
+                textSize, _ = cv2.getTextSize(text, fontFace, fontScale, thickness)
+                cv2.putText(frame, text,
+                             (frame.shape[1] // 2 - textSize[0] // 2, textSize[1]),
+                             fontFace, fontScale, (0, 0, 255), thickness)
+
+            text = 'Press \'q\' to quit'
             textSize, _ = cv2.getTextSize(text, fontFace, fontScale, thickness)
             cv2.putText(frame, text,
-                         (frame.shape[1] // 2 - textSize[0] // 2, textSize[1]),
-                         fontFace, fontScale, color, thickness)
+                        (frame.shape[1] // 2 - textSize[0] // 2,
+                         frame.shape[0]-textSize[1]),
+                        fontFace, fontScale, color, thickness)
 
-            #frame = face.draw(frame)
-            for p1,p2 in zip(face.landmarks[Face._rightUpperEyelid + Face._leftUpperEyelid], face.landmarks[Face._rightLowerEyelid + Face._leftLowerEyelid]):
-                cv2.circle(frame, tuple(p1), 1, (0, 0, 255), 2)
-                cv2.circle(frame, tuple(p2), 1, (0, 0, 255), 2)
-
-                cv2.line(frame, tuple(p1), tuple(p2), (255, 255, 255), 1)
-
-        else:
-            text = 'No Face Detected!'
-            textSize, _ = cv2.getTextSize(text, fontFace, fontScale, thickness)
-            cv2.putText(frame, text,
-                         (frame.shape[1] // 2 - textSize[0] // 2, textSize[1]),
-                         fontFace, fontScale, (0, 0, 255), thickness)
-
-        text = 'Press \'q\' to quit'
-        textSize, _ = cv2.getTextSize(text, fontFace, fontScale, thickness)
-        cv2.putText(frame, text,
-                    (frame.shape[1] // 2 - textSize[0] // 2,
-                     frame.shape[0]-textSize[1]),
-                    fontFace, fontScale, color, thickness)
-
-        cv2.imshow('Video', frame)
+            cv2.imshow('Video', frame)
 
         end = datetime.now()
         delta = (end - start)
         delay = int(max(1, ((1 / fps) - delta.total_seconds()) * 1000))
 
         key = cv2.waitKey(delay)
-
         if key & 0xFF == ord('q'):
             break
         elif key & 0xFF == ord('p'):
