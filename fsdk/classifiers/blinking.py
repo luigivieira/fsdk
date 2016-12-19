@@ -25,19 +25,13 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import sys
-import cv2
 import numpy as np
-
-if __name__ == '__main__':
-    sys.path.append('../../')
-
 from fsdk.data.faces import Face
 
 #=============================================
 class BlinkingDetector:
     """
-    Implements the detector of eye blinking on face images.
+    Implements the detector of eye blinking in videos.
     """
 
     #---------------------------------------------
@@ -45,55 +39,81 @@ class BlinkingDetector:
         """
         Class constructor.
         """
-
+        
         self._landmarks = None
         """
-        Landmarks of the face in the last frame processed.
+        Landmarks of the face in the last frame processed. This is used for
+        comparison, so the displacement of the eyelid features can be checked
+        to detect enough movement to indicate the blinking of both eyes.
+        """
+        
+        self._lastResponse = False
+        """
+        Response of the detection in the last frame processed. This is used for
+        comparison, so a blinking that takes more than two frames is not
+        accounted twice.
         """
 
     #---------------------------------------------
-    def isBlinking(self, landmarks):
+    def detect(self, face):
         """
-        Bla ble
+        Detects the blinking of both eyes in the given frame
 
         Returns
         -------
         ret: bool
             Indication on if the saving was succeeded or not.
         """
-
+        
+        landmarks = face.landmarks
+        height = face.region[3] - face.region[1] + 1
+        movementThreshold = height / 150
+        blinkingThreshold = height / 300
+        
         # Check if this is the first time the detector is used (if it is, save
         # the landmarks to compare in the next frame and assume no blinking)
         if self._landmarks is None:
             self._landmarks = landmarks
-            return False
+            self._lastResponse = False
+            return self._lastResponse
         
-        # Check if it has been enough movement in the eye features to indicate a
-        # possible blink
-        if not self._movementThreshold(landmarks) < 6:
+        # Check if the last frame was already indicating a blink (if it is, 
+        # simply ignore this frame in order to avoid accounting the same
+        # blink twice)
+        if self._lastResponse:
             self._landmarks = landmarks
-            return False
+            self._lastResponse = False
+            return self._lastResponse
+        
+        # Check if there has been enough movement in the eye features despite
+        # the rest of the face (what it is an indication of a possible blink)
+        if self._movementThreshold(landmarks) <= movementThreshold:
+            self._landmarks = landmarks
+            self._lastResponse = False
+            return self._lastResponse
 
         ######################################
         # If this point is reached, there has been movement in the eyelids
-        # So, we check if the vertical displacement (downwards) was big enough
-        # (this second check prevents false positives from head )
+        # and we have a possible blink.
+        # So, now, we check if the vertical displacement of the eyelids
+        # (i.e. downwards) was big enough, in order to prevent false
+        # positives from lateral head movement (roll).
         ######################################
             
         # Get the landmarks of the upper and lower eyelids of both eyes
         upperEyelid = Face._rightUpperEyelid + Face._leftUpperEyelid
         lowerEyelid = Face._rightLowerEyelid + Face._leftLowerEyelid
 
-        # Calculate the average distance of upper and lower eyelids of both eyes
-        # in the last frame
+        # Calculate the average distance of upper and lower eyelids of both
+        # eyes in the last frame
         lastDistance = 0
         for p1, p2 in zip(self._landmarks[upperEyelid],
                           self._landmarks[lowerEyelid]):
             lastDistance += np.linalg.norm(p2 - p1)
         lastDistance //= len(self._landmarks[upperEyelid])
         
-        # Calculate the average distance of upper and lower eyelids of both eyes
-        # in the current frame
+        # Calculate the average distance of upper and lower eyelids of both
+        # eyes in the current frame
         distance = 0
         for p1, p2 in zip(landmarks[upperEyelid],
                           landmarks[lowerEyelid]):
@@ -102,17 +122,17 @@ class BlinkingDetector:
 
         # Calculate the displacement of eyelids between the last and the
         # current frame
-        displacement = int(distance - lastDistance)
-        self._lastDistance = distance
+        displacement = distance - lastDistance
         self._landmarks = landmarks
 
         # A blinking is considered to happen if the displacement is negative
-        # (i.e. it occurred downwards) and it is smaller (bigger, in absolute
-        # terms) than a threshold
-        if displacement < -2:
-            return True
+        # (i.e. it occurred downwards) and bellow a threshold
+        if displacement < -blinkingThreshold:
+            self._lastResponse = True
         else:
-            return False
+            self._lastResponse = False
+            
+        return self._lastResponse
             
     #---------------------------------------------
     def _movementThreshold(self, landmarks):

@@ -117,7 +117,7 @@ def main(argv):
             #    cv2.putText(frame, 'OPENED', (x, y),
             #                fontFace, fontScale, color, thickness)
 
-            b = blinkingDetector.isBlinking(croppedFace.landmarks)
+            b = blinkingDetector.detect(croppedFace)
             if b:
                 blinks += 1
 
