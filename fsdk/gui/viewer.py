@@ -304,18 +304,23 @@ class VideoWidget(QWidget):
 
         self.setAutoFillBackground(False)
         self.setAttribute(Qt.WA_NoSystemBackground, True)
-        self.setAttribute(Qt.WA_PaintOnScreen, True)
 
         palette = self.palette()
         palette.setColor(QPalette.Background, Qt.black)
         self.setPalette(palette)
 
-        self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
-
         self._surface = VideoSurface(self)
 
     #---------------------------------------------
     def sizeHint(self):
+        """
+        Hints the desired size for this widget.
+
+        Returns
+        -------
+        hint: QSize
+            Size that the widget should consider when being resized.
+        """
         return self._surface.surfaceFormat().sizeHint()
 
     #---------------------------------------------
