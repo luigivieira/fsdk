@@ -29,6 +29,7 @@ import sys
 import os
 import csv
 import cv2
+from collections import OrderedDict
 import argparse
 import numpy as np
 from sklearn import svm
@@ -61,6 +62,15 @@ class EmotionsDetector:
         detection of the prototypic emotions.
         """
 
+        self._emotions = OrderedDict([
+                             (0, 'neutral'), (1, 'anger'), (2, 'contempt'),
+                             (3, 'disgust'), (4, 'fear'),  (5, 'happiness'),
+                             (6, 'sadness'), (7, 'surprise')
+                         ])
+        """
+        Class and labels of the prototypic emotions detected by this model.
+        """
+        
         modulePath = os.path.dirname(__file__)
         self._modelFile = os.path.abspath('{}/../models/emotions_model.dat' \
                             .format(modulePath))
@@ -150,9 +160,9 @@ class EmotionsDetector:
         return featureVector
 
     #---------------------------------------------
-    def predict(self, featureVector):
+    def detect(self, featureVector):
         """
-        Predicts if the emotions on the given features.
+        Detects the emotions based on the given features.
 
         Parameters
         ----------
@@ -164,11 +174,19 @@ class EmotionsDetector:
 
         Returns
         -------
-        probabilities: list
-            The probabilities of each of the prototypic emotion.
+        probabilities: dict
+            The probabilities of each of the prototypic emotion, in format:
+            {'anger': value, 'contempt': value, [...]}
         """
 
-        return self._clf.predict_proba([featureVector])
+        probas = self._clf.predict_proba([featureVector])[0]
+        
+        ret = OrderedDict()
+        for cl in range(len(self._emotions)):
+            label = self._emotions[cl]
+            ret[label] = probas[cl-1]
+            
+        return ret
 
     #---------------------------------------------
     def extractFeatures(self, args):
@@ -202,17 +220,19 @@ class EmotionsDetector:
         print('Collecting the sample images...')
 
         samples = []
+        
+        # First, collect all imaged labelled with emotions
         emotionsPath = '{}/Emotion/'.format(args.ckplusPath)
         for dirpath, _, filenames in os.walk(emotionsPath):
             for f in filenames:
                 items = f.split('_')
                 subject = items[0]
-                folder = items[1]
-                sample = items[2]
+                sequence = items[1]
+                frame = items[2]
                 
                 imageFile = '{}/cohn-kanade-images/{}/{}/{}_{}_{}.png' \
-                             .format(args.ckplusPath, subject, folder,
-                                     subject, folder, sample)
+                             .format(args.ckplusPath, subject, sequence,
+                                     subject, sequence, frame)
 
                 if not os.path.isfile(imageFile):
                     print('Image file could not found: {}'.format(imageFile))
@@ -229,6 +249,24 @@ class EmotionsDetector:
                 fd.close()
                     
                 samples.append([os.path.abspath(imageFile), label])
+                
+        # Now, collect all neutral images (the first one of each subject's
+        # sequence - i.e. the file with frame '00000001')
+        imagesPath = '{}/cohn-kanade-images/'.format(args.ckplusPath)
+        for dirpath, _, filenames in os.walk(emotionsPath):
+            for f in filenames:
+                items = f.split('_')
+                frame = items[2]
+                
+                if frame != '00000001':
+                    continue
+
+                imageFile = os.path.join(dirpath, f)    
+                if not os.path.isfile(imageFile):
+                    print('Image file could not found: {}'.format(imageFile))
+                    return -2
+                    
+                samples.append([os.path.abspath(imageFile), 0])
 
         if len(samples) == 0:
             print('No data was found in the given CK+ path: {}' \
@@ -357,7 +395,8 @@ class EmotionsDetector:
         # Execute the cross-validation
         ############################
 
-        clf = svm.SVC(kernel='linear')
+        clf = svm.SVC(kernel='linear', decision_function_shape='ovr',
+                                probability=True)
 
         print('Performing KFold cross-validation with k = {}...'.format(args.k))
         scores = cross_val_score(clf, x, y, cv=args.k, n_jobs=-1)
@@ -414,7 +453,7 @@ class EmotionsDetector:
         if not self.save():
             print('Could not persist the trained model to disk (in file {})' \
                   .format(self._modelFile))
-
+                  
         return 0
 
 #---------------------------------------------

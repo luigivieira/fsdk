@@ -87,8 +87,8 @@ class BlinkingDetector:
         elapsedTime = elapsedFrames / fps
         
         # Calculate the blinking rate, in minutes
-        rate = len(self.detections) / elapsedTime / 60
-        
+        rate = len(self.detections) / elapsedTime * 60
+        print(rate)
         return rate
         
     #---------------------------------------------

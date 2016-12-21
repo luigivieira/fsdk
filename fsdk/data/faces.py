@@ -52,6 +52,11 @@ class Face:
     landmarks in images, shared by all instances of this class.
     """
 
+    _chinLine = [i for i in range(5, 12)]
+    """
+    Indexes of the landmarks at the chin line
+    """
+    
     _jawLine = [i for i in range(17)]
     """
     Indexes of the landmarks at the jaw line
