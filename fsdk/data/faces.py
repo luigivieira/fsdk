@@ -30,6 +30,7 @@ import numpy as np
 import dlib
 import cv2
 import csv
+import math
 
 from fsdk.ui import getChar
 from fsdk.data.gabor import GaborBank
@@ -56,7 +57,7 @@ class Face:
     """
     Indexes of the landmarks at the chin line
     """
-    
+
     _jawLine = [i for i in range(17)]
     """
     Indexes of the landmarks at the jaw line
@@ -122,10 +123,36 @@ class Face:
     Indexes of the landmarks at the inner lip
     """
 
+    _cameraFOV = 60
+    """
+    Field of View in degrees of the camera used to capture the facial images.
+    This value is used to estimate the distance that the face is located from
+    the camera.
+    """
+
+    _cameraResolution = [1280, 720]
+    """
+    Resolution in which the camera used captures the facial images. This value
+    is used to estimate the distance that the face is located from the camera.
+    """
+
+    _avgFaceLength = 12
+    """
+    Average Face Length (menton-sellion) in centimeters. This is the vertical
+    distance from the tip of the chin (menton) to the deepest point of the nasal
+    root depression between the eyes (sellion). This value is used to estimate
+    the distance that the face is located from the camera.
+    """
+
     #---------------------------------------------
     def __init__(self):
         """
         Class constructor.
+        """
+
+        self.distance = 0
+        """
+        Estimated distance in centimeters of the face to the camera.
         """
 
         self.region = ()
@@ -143,6 +170,31 @@ class Face:
         It is an array of pair of values describing the x and y positions of
         each of the 68 landmarks.
         """
+
+    #---------------------------------------------
+    def copy(self):
+        """
+        Deep copies the data of this instance.
+
+        Deep copying means that no mutable attribute (like tuples or lists) in
+        the new copy will be shared with this instance. In that way, the two
+        copies can be changed independently.
+
+        Returns
+        -------
+        ret: Face
+            New instance of Face class deep copied from this instance.
+        """
+
+        # Create the new instance
+        ret = Face()
+
+        # Copy the data
+        ret.distance = self.distance
+        ret.region = self.region
+        ret.landmarks = self.landmarks.copy()
+
+        return ret
 
     #---------------------------------------------
     def isEmpty(self):
@@ -188,50 +240,73 @@ class Face:
             the region and landmarks of the face detected in the image.
         """
 
-        # Initialize the detector and predictor if needed
+        #####################
+        # Setup the detector
+        #####################
+
+        # Initialize the static detector and predictor if this is first use
         if Face._detector is None or Face._predictor is None:
             Face._detector = dlib.get_frontal_face_detector()
 
-            modulePath = os.path.dirname(__file__)
             faceModel = os.path.abspath('{}/../models/face_model.dat' \
-                            .format(modulePath))
+                            .format(os.path.dirname(__file__)))
             Face._predictor = dlib.shape_predictor(faceModel)
+
+        #####################
+        # Data reset
+        #####################
+
+        self.distance = 0
+        self.region = ()
+        self.landmarks = np.array([])
+
+        #####################
+        # Heuristic checks
+        #####################
 
         # Ignore all black images
         if cv2.countNonZero(image[:,:,0]) == 0:
             return False
 
+        #####################
+        # Performance cues
+        #####################
+
         # If requested, scale down the original image in order to improve
         # performance in the initial face detection
         if downSampleRatio is not None:
-            detImage = cv2.resize(image, (0, 0), fx=1.0/downSampleRatio,
-                                                   fy=1.0/downSampleRatio)
+            detImage = cv2.resize(image, (0, 0), fx=1.0 / downSampleRatio,
+                                                 fy=1.0 / downSampleRatio)
         else:
             detImage = image
 
+        #####################
+        # Face detection
+        #####################
+
         # Detect faces in the image
-        # (the 1 in the call to Face._detector indicates the number of up
-        # samples performed before the detection - refer to dlib's documentation
-        # for details)
         detectedFaces = Face._detector(detImage, 1)
         if len(detectedFaces) == 0:
             return False
 
         # No matter how many faces have been found, consider only the first one
-        # (the closest one on the image's field of view)
         region = detectedFaces[0]
 
-        # If downsampling was requested, scale back the detected region so the
-        # landmarks can be proper located on the full resolution image
+        # If downscaling was requested, scale back the detected region so the
+        # landmarks can be proper located on the image in full resolution
         if downSampleRatio is not None:
             region = dlib.rectangle(region.left() * downSampleRatio,
                                     region.top() * downSampleRatio,
                                     region.right() * downSampleRatio,
                                     region.bottom() * downSampleRatio)
 
-        # Fit the shape model over the biggest face region to predict the
-        # positions of its facial landmarks
+        # Fit the shape model over the face region to predict the positions of
+        # its facial landmarks
         faceShape = Face._predictor(image, region)
+
+        #####################
+        # Data update
+        #####################
 
         # Update the object data with the predicted landmark positions and
         # their bounding box (with a small margin of 10 pixels)
@@ -245,6 +320,22 @@ class Face:
                        min(x + w + margin, image.shape[1] - 1),
                        min(y + h + margin, image.shape[0] - 1)
                       )
+
+        # Get the face length in pixels
+        p1 = self.landmarks[Face._noseBridge[0]] # Top of the nose bridge
+        p2 = self.landmarks[Face._chinLine[3]]   # Bottom of the chin line
+        faceLength = np.linalg.norm(p2 - p1)
+
+        # Calculate the focal length of the camera, based the angle of its
+        # Field of View (FOV) and the width of the images captured
+        radFOV = Face._cameraFOV * math.pi / 180 # Convert to radians
+        width = Face._cameraResolution[0]
+        focalLength = (width * 0.5) / math.tan(radFOV * 0.5)
+
+        # Estimate the distance of the face from the camera (in centimeters)
+        # using: the camera focal length (in pixels), the average human facial
+        # length (in centimeters) and the detected face length (in pixels)
+        self.distance = Face._avgFaceLength * focalLength / faceLength
 
         return True
 
@@ -270,7 +361,7 @@ class Face:
             copied, and changes to either the original image or this subimage
             will affect both instances).
 
-        adjustedFace: Face
+        croppedFace: Face
             New instance of Face with the face region and landmarks adjusted to
             the croppedImage.
         """
@@ -282,13 +373,13 @@ class Face:
 
         croppedImage = image[top:bottom+1, left:right+1]
 
-        adjustedFace = Face()
-        adjustedFace.region = (0, 0, right - left, bottom - top)
-        adjustedFace.landmarks = np.array([[p[0] - left, p[1] - top]
+        croppedFace = self.copy()
+        croppedFace.region = (0, 0, right - left, bottom - top)
+        croppedFace.landmarks = np.array([[p[0] - left, p[1] - top]
                                             for p in self.landmarks
                                          ])
 
-        return croppedImage, adjustedFace
+        return croppedImage, croppedFace
 
     #---------------------------------------------
     def draw(self, image, drawRegion = None, drawFaceModel = None):
@@ -335,7 +426,7 @@ class Face:
         if drawRegion:
             cv2.rectangle(image, (self.region[0], self.region[1]),
                                  (self.region[2], self.region[3]),
-                                 (255,0,0), 2)
+                                 (255, 0, 0), 2)
 
         # Draw the positions of landmarks
         color = (0, 0, 255)
@@ -344,7 +435,7 @@ class Face:
 
         # Draw the face model if requested
         if drawFaceModel:
-            color = (255,0, 255)
+            color = (255, 0, 255)
             p = self.landmarks
 
             cv2.polylines(image, [p[Face._jawLine]], False, color, 2)

@@ -63,7 +63,6 @@ def main(argv):
             sys.exit(-1)
         fps = video.get(cv2.CAP_PROP_FPS)
         total = video.get(cv2.CAP_PROP_FRAME_COUNT)
-        print('FPS: {} Total: {} Duration: {}'.format(fps, total, total / fps))
     else:
         video = cv2.VideoCapture(args.camera)
         if not video.isOpened():
@@ -75,7 +74,7 @@ def main(argv):
     bank = GaborBank()
 
     # Detectors of blinking and prototypic emotions
-    blinkingDetector = BlinkingDetector()
+    blinkingDetector = BlinkingDetector(fps)
     emotionsDetector = EmotionsDetector()
 
     # Features of the eyes
@@ -90,14 +89,12 @@ def main(argv):
     paused = False
     blinks = 0
     frameNum = -1
-    
-    focal_pixel = (1280 * 0.5) / math.tan(60 * 0.5 * math.pi / 180)
 
     # Process the video input
     while True:
 
         start = datetime.now()
-    
+
         if not paused:
             ret, frame = video.read()
             if not ret:
@@ -118,23 +115,18 @@ def main(argv):
                 #                                        croppedFace.landmarks)
                 #emotions = emotionsDetector.detect(features)
                 #drawEmotionInfo(emotions, frame)
-                
+
                 # Detect blinks
                 b = blinkingDetector.detect(frameNum, croppedFace)
                 if b:
                     blinks += 1
 
                 bpm = blinkingDetector.getBlinkingRate(frameNum+1, fps)
-                
+
                 drawBlinkInfo(blinks, bpm, frame)
-                
-                # Calculate the distance to the camera
-                points = face.landmarks[Face._noseBridge + Face._chinLine]
-                _, _, _, faceLength = cv2.boundingRect(points)
-                dist = 10 * focal_pixel / faceLength
-                
-                print('Distance (in centimeters): {:.2f}'.format(dist))
-                
+
+                print('Distance (in centimeters): {:.2f}'.format(face.distance))
+
                 #frame = face.draw(frame)
             else:
                 text = 'No Face Detected!'
@@ -169,15 +161,15 @@ def main(argv):
 def drawEmotionInfo(emotions, image):
     """
     Draws emotional information on the given image.
-    
+
     Parameters
     ----------
     emotions: dict
         Dictionary with the probabilities of each prototypic emotion.
     image: numpy.array
         Image data where to draw the text info.
-    """    
-    
+    """
+
     fontFace = cv2.FONT_HERSHEY_SIMPLEX
     fontScale = 0.5
     thickness = 1
@@ -188,28 +180,28 @@ def drawEmotionInfo(emotions, image):
     for emotion, probability in emotions.items():
         text = '{}:'.format(emotion)
         textSize, _ = cv2.getTextSize(text, fontFace, fontScale, thickness)
-        
+
         x = 10
         y = i * textSize[1] * 2
         i += 1
-        
+
         cv2.putText(image, text, (x, y), fontFace, fontScale, black, thickness * 3)
-        cv2.putText(image, text, (x, y), fontFace, fontScale, white, thickness)    
-    
+        cv2.putText(image, text, (x, y), fontFace, fontScale, white, thickness)
+
         x += textSize[0] + 40
         y -= textSize[1]
-        
+
         w = 40
         h = 10
-    
+
         cv2.rectangle(image, (x, y), (x + w, y + h), white)
-    
-    
+
+
 #---------------------------------------------
 def drawBlinkInfo(blinks, bpm, image):
     """
     Draws blinking information on the given image.
-    
+
     Parameters
     ----------
     blinks: int
@@ -224,14 +216,14 @@ def drawBlinkInfo(blinks, bpm, image):
     fontScale = 1
     thickness = 1
     color = (255, 255, 255)
-    
+
     text = 'Blinks: {:d} (per minute: {:.7f})'.format(blinks, bpm)
     textSize, _ = cv2.getTextSize(text, fontFace, fontScale, thickness)
-    
+
     x = image.shape[1] // 2 - textSize[0] // 2
     y = textSize[1]
     cv2.putText(image, text, (x, y), fontFace, fontScale, color, thickness)
-                    
+
 #---------------------------------------------
 def parseCommandLine(argv):
     """
