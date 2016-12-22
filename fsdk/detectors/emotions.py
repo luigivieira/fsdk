@@ -39,8 +39,8 @@ from sklearn.externals import joblib
 if __name__ == '__main__':
     sys.path.append('../../')
 
-from fsdk.data.gabor import GaborBank
-from fsdk.data.faces import Face
+from fsdk.filters.gabor import GaborBank
+from fsdk.detectors.faces import Face
 import fsdk.ui as ui
 
 #=============================================
@@ -70,9 +70,9 @@ class EmotionsDetector:
         """
         Class and labels of the prototypic emotions detected by this model.
         """
-        
+
         modulePath = os.path.dirname(__file__)
-        self._modelFile = os.path.abspath('{}/../models/emotions_model.dat' \
+        self._modelFile = os.path.abspath('{}/./models/emotions_model.dat' \
                             .format(modulePath))
         """
         Name of the file used to persist the model in the disk.
@@ -180,12 +180,12 @@ class EmotionsDetector:
         """
 
         probas = self._clf.predict_proba([featureVector])[0]
-        
+
         ret = OrderedDict()
         for cl in range(len(self._emotions)):
             label = self._emotions[cl]
             ret[label] = probas[cl-1]
-            
+
         return ret
 
     #---------------------------------------------
@@ -220,7 +220,7 @@ class EmotionsDetector:
         print('Collecting the sample images...')
 
         samples = []
-        
+
         # First, collect all imaged labelled with emotions
         emotionsPath = '{}/Emotion/'.format(args.ckplusPath)
         for dirpath, _, filenames in os.walk(emotionsPath):
@@ -229,7 +229,7 @@ class EmotionsDetector:
                 subject = items[0]
                 sequence = items[1]
                 frame = items[2]
-                
+
                 imageFile = '{}/cohn-kanade-images/{}/{}/{}_{}_{}.png' \
                              .format(args.ckplusPath, subject, sequence,
                                      subject, sequence, frame)
@@ -237,19 +237,19 @@ class EmotionsDetector:
                 if not os.path.isfile(imageFile):
                     print('Image file could not found: {}'.format(imageFile))
                     return -2
-                                   
+
                 file = os.path.join(dirpath, f)
                 try:
                     fd = open(file)
-                except:                
+                except:
                     print('Could not open file {} for read'.format(file))
                     return -3
-                    
+
                 label = [int(float(v)) for v in next(fd).split()][0]
                 fd.close()
-                    
+
                 samples.append([os.path.abspath(imageFile), label])
-                
+
         # Now, collect all neutral images (the first one of each subject's
         # sequence - i.e. the file with frame '00000001')
         imagesPath = '{}/cohn-kanade-images/'.format(args.ckplusPath)
@@ -257,22 +257,22 @@ class EmotionsDetector:
             for f in filenames:
                 items = f.split('_')
                 frame = items[2]
-                
+
                 if frame != '00000001':
                     continue
 
-                imageFile = os.path.join(dirpath, f)    
+                imageFile = os.path.join(dirpath, f)
                 if not os.path.isfile(imageFile):
                     print('Image file could not found: {}'.format(imageFile))
                     return -2
-                    
+
                 samples.append([os.path.abspath(imageFile), 0])
 
         if len(samples) == 0:
             print('No data was found in the given CK+ path: {}' \
                 .format(args.ckplusPath))
             return -4
-               
+
         ##################################
         # Perform the extraction
         ##################################
@@ -306,7 +306,7 @@ class EmotionsDetector:
         procCount = 0
         total = len(samples)
         for sample, label in samples:
-            
+
             # Update progress information
             sampleName = os.path.split(sample)[1]
             prefix = '{:40.40s}'.format(sampleName)
@@ -453,7 +453,7 @@ class EmotionsDetector:
         if not self.save():
             print('Could not persist the trained model to disk (in file {})' \
                   .format(self._modelFile))
-                  
+
         return 0
 
 #---------------------------------------------

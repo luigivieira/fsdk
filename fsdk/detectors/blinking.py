@@ -26,7 +26,7 @@
 # SOFTWARE.
 
 import numpy as np
-from fsdk.data.faces import Face
+from fsdk.detectors.faces import Face
 
 #=============================================
 class BlinkingDetector:
@@ -269,7 +269,7 @@ class BlinkingDetector:
         frameTime = frameNum / self._fps
 
         # If a detection occurred, update the list of detections with the frame
-        # number and time of blink
+        # number and time of blink (in seconds)
         if blinkDetected:
             self.blinks.append([frameNum, frameTime])
 

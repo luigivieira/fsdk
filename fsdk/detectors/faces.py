@@ -33,7 +33,6 @@ import csv
 import math
 
 from fsdk.ui import getChar
-from fsdk.data.gabor import GaborBank
 
 #=============================================
 class Face:
@@ -248,7 +247,7 @@ class Face:
         if Face._detector is None or Face._predictor is None:
             Face._detector = dlib.get_frontal_face_detector()
 
-            faceModel = os.path.abspath('{}/../models/face_model.dat' \
+            faceModel = os.path.abspath('{}/./models/face_model.dat' \
                             .format(os.path.dirname(__file__)))
             Face._predictor = dlib.shape_predictor(faceModel)
 

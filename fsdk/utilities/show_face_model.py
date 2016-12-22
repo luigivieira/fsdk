@@ -35,7 +35,7 @@ if __name__ == '__main__':
     import sys
     sys.path.append('../../')
 
-from fsdk.data.faces import Face
+from fsdk.detectors.faces import Face
 
 #---------------------------------------------
 def main(argv):

@@ -36,10 +36,10 @@ if __name__ == '__main__':
     import sys
     sys.path.append('../../')
 
-from fsdk.data.faces import Face
-from fsdk.data.gabor import GaborBank
-from fsdk.classifiers.blinking import BlinkingDetector
-from fsdk.classifiers.emotions import EmotionsDetector
+from fsdk.filters.gabor import GaborBank
+from fsdk.detectors.faces import Face
+from fsdk.detectors.blinking import BlinkingDetector
+from fsdk.detectors.emotions import EmotionsDetector
 
 #---------------------------------------------
 def main(argv):
