@@ -117,13 +117,11 @@ def main(argv):
                 #drawEmotionInfo(emotions, frame)
 
                 # Detect blinks
-                b = blinkingDetector.detect(frameNum, croppedFace)
-                if b:
-                    blinks += 1
+                blinkingDetector.detect(frameNum, croppedFace)
 
-                bpm = blinkingDetector.getBlinkingRate(frameNum+1, fps)
-
-                drawBlinkInfo(blinks, bpm, frame)
+                numBlinks = len(blinkingDetector.blinks)
+                bpm = blinkingDetector.bpm
+                drawBlinkInfo(numBlinks, bpm, frame)
 
                 print('Distance (in centimeters): {:.2f}'.format(face.distance))
 
@@ -217,7 +215,7 @@ def drawBlinkInfo(blinks, bpm, image):
     thickness = 1
     color = (255, 255, 255)
 
-    text = 'Blinks: {:d} (per minute: {:.7f})'.format(blinks, bpm)
+    text = 'Total blinks: {:d} (blinks per minute: {:d})'.format(blinks, bpm)
     textSize, _ = cv2.getTextSize(text, fontFace, fontScale, thickness)
 
     x = image.shape[1] // 2 - textSize[0] // 2

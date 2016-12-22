@@ -53,10 +53,19 @@ class BlinkingDetector:
         number.
         """
 
-        self._detections = []
+        self.bpm = 0
         """
-        List of frames (their numbers and their time in milliseconds) in which
-        blinks were detected in the last minute before current frame. This
+        Blinking rate (in blinks per minute).
+        """
+
+        self.blinks = []
+        """
+        List of all blinks detected (with frame number and time in seconds).
+        """
+
+        self._lastMinuteBlinks = []
+        """
+        List of blinks detected in the last minute before current frame. This
         is kept in order to allow calculating the average blinking per minute
         rate.
         """
@@ -74,35 +83,6 @@ class BlinkingDetector:
         comparison, so a blinking that takes more than two frames is not
         accounted twice.
         """
-
-    #---------------------------------------------
-    def getBlinkingRate(self, elapsedFrames, fps):
-        """
-        Calculates the blinking rate (blinks per minute).
-
-        Parameters
-        ----------
-        elapsedFrames: int
-            Number of elapsed frames in the video being processed.
-        fps: int
-            Frame rate in frames per second in which the video has been
-            recorded.
-
-        Returns
-        -------
-        rate: float
-            Blinking rate in blinks per minute.
-        """
-
-        if elapsedFrames == 0:
-            return 0
-
-        # Calculate the elapsed time in seconds
-        elapsedTime = elapsedFrames / fps
-
-        # Calculate the blinking rate, in minutes
-        rate = len(self._detections) / elapsedTime * 60
-        return rate
 
     #---------------------------------------------
     def detect(self, frameNum, face):
@@ -285,10 +265,21 @@ class BlinkingDetector:
         # Save the landmarks of current frame
         self._landmarks = landmarks
 
-        # Update the list of detections in the last minute
+        # Calculate the frame time in seconds
+        frameTime = frameNum / self._fps
+
+        # If a detection occurred, update the list of detections with the frame
+        # number and time of blink
         if blinkDetected:
-            frameTime = frameNum / self._fps
-            self._detections.append([frameNum, frameTime])
+            self.blinks.append([frameNum, frameTime])
+
+        # Update the list of detections that happened in the last minute
+        minTime = frameTime - 60.0
+        self._lastMinuteBlinks = [v for v in self.blinks if v[1] >= minTime]
+
+        # The blinking rate (blinks per minute) is the number of blinks that
+        # happened in the last minute
+        self.bpm = len(self._lastMinuteBlinks)
 
         # Return the current frame response
         return blinkDetected
