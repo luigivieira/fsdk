@@ -122,7 +122,7 @@ class EmotionsDetector:
         return True
 
     #---------------------------------------------
-    def relevantFeatures(self, gaborResponses, facialLandmarks):
+    def _relevantFeatures(self, gaborResponses, facialLandmarks):
         """
         Get the features that are relevant for the detection of emotions
         from the matrix of responses to the bank of Gabor kernels.
@@ -160,17 +160,20 @@ class EmotionsDetector:
         return featureVector
 
     #---------------------------------------------
-    def detect(self, featureVector):
+    def detect(self, face, gaborResponses):
         """
         Detects the emotions based on the given features.
 
         Parameters
         ----------
-        featureVector: list
-            A list of values in range [-1, 1] with the responses of Gabor
-            kernels applied to an image and collected at the facial landmarks.
-            These features should be separated from all the responses using the
-            method `relevantFeatures()`.
+        face: Face
+            Instance of the Face object with the facial landmarks detected on
+            the facial image.
+        gaborResponses: numpy.array
+            Matrix of responses to the bank of Gabor kernels applied to the face
+            region of an image. The first dimension of this matrix has size 32,
+            one for each kernel in the bank. The other two dimensions are in the
+            same size as the original image used for their extraction.
 
         Returns
         -------
@@ -179,8 +182,13 @@ class EmotionsDetector:
             {'anger': value, 'contempt': value, [...]}
         """
 
-        probas = self._clf.predict_proba([featureVector])[0]
+        # Filter only the responses at the facial landmarks
+        features = self._relevantFeatures(gaborResponses, face.landmarks)
 
+        # Predict the emotion probabilities on these features
+        probas = self._clf.predict_proba([features])[0]
+
+        # Build a dictionary with the probabilities and emotion labels
         ret = OrderedDict()
         for cl in range(len(self._emotions)):
             label = self._emotions[cl]
