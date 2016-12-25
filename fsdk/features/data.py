@@ -62,6 +62,18 @@ class FrameData:
         Positions of the facial landmarks detected in this frame.
         """
 
+        self.faceDistance = 0
+        """
+        Estimated distance in centimeters of the face to the camera in this
+        frame.
+        """
+
+        self.faceDistGradient = 0
+        """
+        Gradient of the face distance in this frame, considering a window of
+        size 3 (a mask [-1, 0, 1] centered at the current frame).
+        """
+
         self.emotions = OrderedDict()
         """
         Probabilities of the prototypical emotions detected in this frame.

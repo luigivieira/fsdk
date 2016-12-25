@@ -193,6 +193,7 @@ class FeatureExtractor:
             frame, face = face.crop(frame)
             frameData.faceRegion = face.region
             frameData.faceLandmarks = face.landmarks
+            frameData.faceDistance = face.distance
 
             # Detect the prototypical emotions
             gaborResponses = gaborBank.filter(frame)
@@ -207,5 +208,23 @@ class FeatureExtractor:
             self._observer.progress(frameNum + 1, totalFrames)
 
         video.release()
+
+        ##############################################################
+        # Update the gradients of the face distances
+        ##############################################################
+
+        # Calculate the gradients
+        frames = [frame.frameNum for frame in data]
+        distances = [frame.faceDistance for frame in data]
+        gradients = np.gradient(distances)
+
+        # Update the gradient values in the video data instance
+        for i, frameNum in enumerate(frames):
+            data[frameNum].faceDistGradient = grad[i]
+
+        ##############################################################
+        # Indicate the conclusion
+        ##############################################################
+
         self._observer.progress(totalFrames, totalFrames)
         self._observer.concluded(videoData)
