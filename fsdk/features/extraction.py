@@ -199,6 +199,8 @@ class FeatureExtractor:
             # Detect the prototypical emotions
             gaborResponses = gaborBank.filter(frame)
             frameData.emotions = emotions.detect(face, gaborResponses)
+            feats = emotions._relevantFeatures(gaborResponses, face.landmarks)
+            frameData.faceGaborFeatures = feats
 
             # Detect blinking
             blinking.detect(frameNum, face)

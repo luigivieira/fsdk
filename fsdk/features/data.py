@@ -36,6 +36,20 @@ class FrameData:
     for the assessment of fun.
     """
 
+    header = lambda: ['frame', 'left', 'top', 'right', 'bottom'] + \
+                     list(np.array([['mark.{:d}.x'.format(i),
+                                     'mark.{:d}.y'.format(i)]
+                                    for i in range(68)]).reshape(-1)) + \
+                     ['gabor.{:d}.{:d}'.format(k, i)
+                            for k in range(32)
+                            for i in range(68)] + \
+                     ['distance', 'gradient', 'neutral', 'anger', 'contempt',
+                      'disgust', 'fear', 'happiness', 'sadness', 'surprise',
+                      'blinks', 'rate']
+    """
+    Helper static function to create the header for storing frames of data.
+    """
+
     #---------------------------------------------
     def __init__(self, frameNum):
         """
@@ -75,6 +89,13 @@ class FrameData:
         size 3 (a mask [-1, 0, 1] centered at the current frame).
         """
 
+        self.faceGaborFeatures = np.array([])
+        """
+        Responses of the filtering with the bank ofGabor kernels at each of the
+        facial landmarks. The Gabor bank used has 32 kernels and there are 68
+        landmarks, hence this is a vector of 2176 features (32 x 68).
+        """
+
         self.emotions = OrderedDict()
         """
         Probabilities of the prototypical emotions detected in this frame.
@@ -90,6 +111,27 @@ class FrameData:
         Blink rate (in blinks per minute) accounted in the last minute of the
         video before this frame.
         """
+
+    #---------------------------------------------
+    def tolist(self):
+        """
+        Gets the contents of the Frame Data as a list of values (useful to
+        write the data to a CSV file, for instance), in the order defined by
+        the method header().
+
+        Returns
+        -------
+        ret: list
+            A list with all values of the frame data.
+        """
+        ret = [self.frameNum, self.faceRegion[0], self.faceRegion[1],
+              self.faceRegion[2], self.faceRegion[3]] + \
+              list(self.faceLandmarks.reshape(-1)) + \
+              list(self.faceGaborFeatures) + \
+              [self.faceDistance, self.faceDistGradient] + \
+              [p for _, p in self.emotions.items()] + \
+              [self.blinkCount, self.blinkRate]
+        return ret
 
 #=============================================
 class VideoDataIterator:
@@ -260,27 +302,9 @@ class VideoData:
         writer = csv.writer(file, delimiter=',', quotechar='"',
                             quoting=csv.QUOTE_MINIMAL)
 
-        # Write the header
-        header = ['frameNum', 'faceRegion.left', 'faceRegion.top',
-                  'faceRegion.right', 'faceRegion.bottom' ] + \
-                 list(np.array([['faceLandmarks.{:d}.x'.format(i),
-                            'faceLandmarks.{:d}.y'.format(i)]
-                            for i in range(68)]).reshape(-1)) + \
-                 ['faceDistance', 'faceDistanceGradient', 'emotions.neutral',
-                  'emotions.anger', 'emotions.contempt', 'emotions.disgust',
-                  'emotions.fear', 'emotions.happiness', 'emotions.sadness',
-                  'emotions.surprise', 'blinkCount', 'blinkRate']
-
-        writer.writerow(header)
-
+        writer.writerow(FrameData.header())
         for _, frame in self._frames.items():
-            row = [frame.frameNum, frame.faceRegion[0], frame.faceRegion[1],
-                   frame.faceRegion[2], frame.faceRegion[3]] + \
-                  list(frame.faceLandmarks.reshape(-1)) + \
-                  [frame.faceDistance, frame.faceDistGradient] + \
-                  [p for _, p in frame.emotions.items()] + \
-                  [frame.blinkCount, frame.blinkRate]
-            writer.writerow(row)
+            writer.writerow(frame.tolist())
 
         file.close()
         return True
