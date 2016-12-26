@@ -26,6 +26,7 @@
 # SOFTWARE.
 
 import numpy as np
+import csv
 from collections import OrderedDict
 
 #=============================================
@@ -272,12 +273,12 @@ class VideoData:
 
         writer.writerow(header)
 
-        for frame in self._frames:
-            row = [frame.frameNum, frame.faceRegion.left, frame.faceRegion.top,
-                   frame.faceRegion.right, frame.faceRegion.bottom] + \
+        for _, frame in self._frames.items():
+            row = [frame.frameNum, frame.faceRegion[0], frame.faceRegion[1],
+                   frame.faceRegion[2], frame.faceRegion[3]] + \
                   list(frame.faceLandmarks.reshape(-1)) + \
                   [frame.faceDistance, frame.faceDistGradient] + \
-                  [p for _, p in frame.emotions] + \
+                  [p for _, p in frame.emotions.items()] + \
                   [frame.blinkCount, frame.blinkRate]
             writer.writerow(row)
 

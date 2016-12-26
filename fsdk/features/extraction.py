@@ -228,4 +228,4 @@ class FeatureExtractor:
         ##############################################################
 
         self._observer.progress(totalFrames, totalFrames)
-        self._observer.concluded(videoData)
+        self._observer.concluded(data)
