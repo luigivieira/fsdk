@@ -25,6 +25,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import csv
 from enum import Enum
 import cv2
 import numpy as np
@@ -42,9 +43,14 @@ class ExtractionErrors(Enum):
     features.
     """
 
-    InvalidFile = 0
+    VideoFileReadError = 0,
     """
-    The video file provided does not exist or can not be read.
+    The video file provided could not be read.
+    """
+
+    DataFileWriteError = 1
+    """
+    The CSV data file provided could not be created or written.
     """
 
 #=============================================
@@ -85,15 +91,9 @@ class BaseTaskObserver:
         raise NotImplementedError()
 
     #---------------------------------------------
-    def concluded(self, data):
+    def concluded(self):
         """
         Indicates the conclusion of the extraction task.
-
-        Parameters
-        ----------
-        data: VideoData
-            Instance of the VideoData class produced with the features extracted
-            from each frame of the video processed.
         """
         raise NotImplementedError()
 
@@ -104,7 +104,7 @@ class FeatureExtractor:
     """
 
     #---------------------------------------------
-    def __init__(self, videoFile, observer, downSampling = 4):
+    def __init__(self, videoFile, dataFile, observer, downSampling = 4):
         """
         Class constructor.
 
@@ -112,6 +112,9 @@ class FeatureExtractor:
         ----------
         videoFile: str
             Path and name of the video file to process.
+        dataFile: str
+            Path and name of the CSV file to save the data of the features
+            extracted.
         observer: TaskObserver
             Instance of a TaskObserver to receive the notifications produced
             during execution.
@@ -124,6 +127,11 @@ class FeatureExtractor:
         self._videoFile = videoFile
         """
         Name of the video file to be processed for feature extraction.
+        """
+
+        self._dataFile = dataFile
+        """
+        Name of the CSV file to save the data of the features extracted.
         """
 
         self._observer = observer
@@ -142,20 +150,50 @@ class FeatureExtractor:
     #---------------------------------------------
     def run(self):
         """
-        Runs the extraction.
+        Runs the extraction task.
+
+        This method can be run directly or through a multi-thread/process
+        interface, since all replies are provided through the TaskObserver
+        interface provided in the constructor.
+
+        Observation: as the data is extracted, it is not kept in memory to avoid
+        overcharging the system resources (particularly when multiple tasks are
+        concurrently executed). Instead, each row is immediately written to the
+        CSV text files.
         """
 
         ##############################################################
         # Opens the video file for reading
         ##############################################################
 
+        # Open the video file for reading
         video = cv2.VideoCapture(self._videoFile)
         if video is None:
-            self._observer.error(ExtractionErrors.InvalidFile)
+            self._observer.error(ExtractionErrors.VideoFileReadError)
             return
 
+        # Read the video properties: fps and number of frames
         fps = int(video.get(cv2.CAP_PROP_FPS))
         totalFrames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+
+        ##############################################################
+        # Create the CSV data to save the features extracted
+        ##############################################################
+
+        # Open the text file for writing
+        try:
+            file = open(self._dataFile, 'w', newline='')
+        except IOError as e:
+            video.release()
+            self._observer.error(ExtractionErrors.DataFileWriteError)
+            return
+
+        # Create the CSV writer over the text file
+        writer = csv.writer(file, delimiter=',', quotechar='"',
+                            quoting=csv.QUOTE_MINIMAL)
+
+        # Write the header
+        writer.writerow(FrameData.header())
 
         ##############################################################
         # Create the filters/detectors used in the feature extraction
@@ -169,9 +207,6 @@ class FeatureExtractor:
         ##############################################################
         # Process each frame of the video to extract the data
         ##############################################################
-
-        # Create the object to collect the data extracted from the video
-        data = VideoData()
 
         # Process each frame of the video sequentially
         self._observer.progress(0, totalFrames)
@@ -207,14 +242,23 @@ class FeatureExtractor:
             frameData.blinkCount = len(blinking.blinks)
             frameData.blinkRate = blinking.bpm
 
-            data[frameNum] = frameData
+            # Write the frame to a new row on the CSV file
+            writer.writerow(frameData.toList())
+
+            # Indicate the progress
             self._observer.progress(frameNum + 1, totalFrames)
 
+        # Close the video and the CSV files
         video.release()
+        file.close()
 
         ##############################################################
         # Update the gradients of the face distances
         ##############################################################
+
+        # Read all the data saved
+        data = VideoData()
+        data.read(self._dataFile)
 
         # Calculate the gradients
         frames = [frame.frameNum for frame in data]
@@ -225,9 +269,12 @@ class FeatureExtractor:
         for i, frameNum in enumerate(frames):
             data[frameNum].faceDistGradient = gradients[i]
 
+        # Save it back to the file
+        data.save(self._dataFile)
+
         ##############################################################
-        # Indicate the conclusion
+        # Conclude
         ##############################################################
 
         self._observer.progress(totalFrames, totalFrames)
-        self._observer.concluded(data)
+        self._observer.concluded()

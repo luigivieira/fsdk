@@ -44,16 +44,19 @@ class TaskObserver(BaseTaskObserver):
     """
 
     #---------------------------------------------
-    def __init__(self, dataFilename):
+    def __init__(self, videoFile, dataFile):
         """
         Class constructor.
 
         Parameters
         ----------
-        dataFilename: str
-            Path and name of the CSV file to create with the features extracted.
+        videoFile: str
+            Path and name of the video file processed by this task.
+        dataFile: str
+            Path and name of the CSV file created with the extracted features.
         """
-        self._dataFilename = dataFilename
+        self._videoFile = videoFile
+        self._dataFile = dataFile
 
     #---------------------------------------------
     def error(self, errorType):
@@ -65,7 +68,12 @@ class TaskObserver(BaseTaskObserver):
         errorType: ExtractionErrors
             Type of the error that occurred.
         """
-        print('An error occurred: {}'.format(errorType))
+        if errorType == ExtractionErrors.VideoFileReadError:
+            print('(ERROR): could not open video file: {}' \
+                .format(self._videoFile))
+        elif errorType == ExtractionErrors.DataFileWriteError:
+            print('(ERROR): could not create the CSV file: {}' \
+                .format(self._dataFile))
 
     #---------------------------------------------
     def progress(self, concluded, total):
@@ -79,24 +87,15 @@ class TaskObserver(BaseTaskObserver):
         total: int
             Number of total steps to conclude the whole extraction process.
         """
-        print('Progress of the task: {} of {}'.format(concluded, total))
+        print('{} progress: {:.2f}%' \
+                .format(self._videoFile, concluded / total * 100))
 
     #---------------------------------------------
-    def concluded(self, data):
+    def concluded(self):
         """
         Indicates the conclusion of the extraction task.
-
-        Parameters
-        ----------
-        data: VideoData
-            Instance of the VideoData class produced with the features extracted
-            from each frame of the video processed.
         """
-        if data.save(self._dataFilename):
-            print('Features extracted and saved to file {}' \
-                    .format(self._dataFilename))
-        else:
-            print('Could not write to file {}'.format(self._dataFilename))
+        print('{} concluded.'.format(self._videoFile))
 
 #---------------------------------------------
 def main(argv):
@@ -112,8 +111,8 @@ def main(argv):
     # Parse the command line
     args = parseCommandLine(argv)
 
-    observer = TaskObserver(args.csv)
-    task = FeatureExtractor(args.video, observer)
+    observer = TaskObserver(args.video, args.csv)
+    task = FeatureExtractor(args.video, args.csv, observer)
     task.run()
 
 #---------------------------------------------

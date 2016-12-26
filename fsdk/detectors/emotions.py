@@ -153,8 +153,7 @@ class EmotionsDetector:
         points = facialLandmarks
         responses = gaborResponses[:, points[:,1], points[:,0]]
 
-        # Reshape the bidimensional matrix to a single dimension (i.e. a list
-        # of values)
+        # Reshape the bi-dimensional matrix to a single dimension
         featureVector = responses.reshape(-1).tolist()
 
         return featureVector
@@ -177,7 +176,7 @@ class EmotionsDetector:
 
         Returns
         -------
-        probabilities: dict
+        probabilities: OrderedDict
             The probabilities of each of the prototypic emotion, in format:
             {'anger': value, 'contempt': value, [...]}
         """

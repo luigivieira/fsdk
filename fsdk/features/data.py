@@ -25,9 +25,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import numpy as np
 import csv
 from collections import OrderedDict
+import numpy as np
 
 #=============================================
 class FrameData:
@@ -113,7 +113,49 @@ class FrameData:
         """
 
     #---------------------------------------------
-    def tolist(self):
+    def fromList(self, values):
+        """
+        Sets the contents of the Frame Data from a list of values (useful to
+        read the data from a CSV file, for instance), in the order defined by
+        the method header().
+
+        Parameters
+        ----------
+        values: list
+            A list with all values of the frame data. The values are expected
+            as strings (since they are probably read from a CSV file), so they
+            will be converted accordingly to the target types.
+
+        Exceptions
+        -------
+        exception: RuntimeError
+            Raised if the list has unexpected number of values.
+        exception: ValueError
+            Raised if any position in the list has an unexpected value/type.
+        """
+        if len(values) != len(FrameData.header()):
+            raise RuntimeError
+
+        self.frameNum = int(values[0])
+        self.faceRegion = (int(values[1]), int(values[2]),
+                           int(values[3]), int(values[4]))
+        self.faceLandmarks = np.array(values[5:141], dtype=int).reshape(68, 2)
+        self.faceGaborFeatures = [float(i) for i in values[141:2317]]
+        self.faceDistance = float(values[2317])
+        self.faceDistGradient = float(values[2318])
+        self.emotions = OrderedDict([('neutral',   float(values[2319])),
+                                     ('anger',     float(values[2320])),
+                                     ('contempt',  float(values[2321])),
+                                     ('disgust',   float(values[2322])),
+                                     ('fear',      float(values[2323])),
+                                     ('happiness', float(values[2324])),
+                                     ('sadness',   float(values[2325])),
+                                     ('surprise',  float(values[2326]))])
+        self.blinkCount = int(values[2327])
+        self.blinkRate = int(values[2328])
+
+    #---------------------------------------------
+    def toList(self):
         """
         Gets the contents of the Frame Data as a list of values (useful to
         write the data to a CSV file, for instance), in the order defined by
@@ -127,7 +169,7 @@ class FrameData:
         ret = [self.frameNum, self.faceRegion[0], self.faceRegion[1],
               self.faceRegion[2], self.faceRegion[3]] + \
               list(self.faceLandmarks.reshape(-1)) + \
-              list(self.faceGaborFeatures) + \
+              self.faceGaborFeatures + \
               [self.faceDistance, self.faceDistGradient] + \
               [p for _, p in self.emotions.items()] + \
               [self.blinkCount, self.blinkRate]
@@ -277,6 +319,31 @@ class VideoData:
         return VideoDataIterator(self)
 
     #---------------------------------------------
+    def read(self, fileName):
+        try:
+            file = open(fileName, 'r', newline='')
+        except IOError as e:
+            return False
+
+        self._frames = OrderedDict()
+
+        reader = csv.reader(file, delimiter=',', quotechar='"',
+                            quoting=csv.QUOTE_MINIMAL)
+        first = True
+        for row in reader:
+
+            # Ignore the header
+            if first:
+                first = False
+                continue
+
+            frame = FrameData(0)
+            frame.fromList(row)
+            self._frames[frame.frameNum] = frame
+
+        file.close()
+
+    #---------------------------------------------
     def save(self, fileName):
         """
         Saves the contents of this instance object to the given file in the CSV
@@ -304,7 +371,7 @@ class VideoData:
 
         writer.writerow(FrameData.header())
         for _, frame in self._frames.items():
-            writer.writerow(frame.tolist())
+            writer.writerow(frame.toList())
 
         file.close()
         return True
