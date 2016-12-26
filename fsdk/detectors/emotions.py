@@ -229,7 +229,7 @@ class EmotionsDetector:
 
         samples = []
 
-        # First, collect all imaged labelled with emotions
+        # First, collect all imaged labeled with emotions
         emotionsPath = '{}/Emotion/'.format(args.ckplusPath)
         for dirpath, _, filenames in os.walk(emotionsPath):
             for f in filenames:
@@ -261,11 +261,14 @@ class EmotionsDetector:
         # Now, collect all neutral images (the first one of each subject's
         # sequence - i.e. the file with frame '00000001')
         imagesPath = '{}/cohn-kanade-images/'.format(args.ckplusPath)
-        for dirpath, _, filenames in os.walk(emotionsPath):
+        for dirpath, _, filenames in os.walk(imagesPath):
             for f in filenames:
-                items = f.split('_')
-                frame = items[2]
+                items = f.split('.')[0].split('_')
 
+                if len(items) != 3:
+                    continue
+
+                frame = items[2]
                 if frame != '00000001':
                     continue
 
@@ -340,7 +343,7 @@ class EmotionsDetector:
             responses = bank.filter(image)
 
             # Get only the features relevant for this model
-            features = self.relevantFeatures(responses, face.landmarks)
+            features = self._relevantFeatures(responses, face.landmarks)
 
             # Save the features to the CSV file
             row = [sampleName] + features + [label]
