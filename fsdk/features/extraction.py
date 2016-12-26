@@ -27,6 +27,7 @@
 
 from enum import Enum
 import cv2
+import numpy as np
 
 from fsdk.filters.gabor import GaborBank
 from fsdk.detectors.faces import Face
@@ -41,7 +42,7 @@ class ExtractionErrors(Enum):
     features.
     """
 
-    InvalidFile
+    InvalidFile = 0
     """
     The video file provided does not exist or can not be read.
     """
@@ -148,13 +149,13 @@ class FeatureExtractor:
         # Opens the video file for reading
         ##############################################################
 
-        video = cv2.VideoCapturer(self._fileName)
+        video = cv2.VideoCapture(self._videoFile)
         if video is None:
             self._observer.error(ExtractionErrors.InvalidFile)
             return
 
-        fps = video.get(cv2.CAP_PROP_FPS)
-        totalFrames = video.get(cv2.CAP_PROP_FRAME_COUNT)
+        fps = int(video.get(cv2.CAP_PROP_FPS))
+        totalFrames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
 
         ##############################################################
         # Create the filters/detectors used in the feature extraction
@@ -204,7 +205,7 @@ class FeatureExtractor:
             frameData.blinkCount = len(blinking.blinks)
             frameData.blinkRate = blinking.bpm
 
-            videoData[frameNum] = frameData
+            data[frameNum] = frameData
             self._observer.progress(frameNum + 1, totalFrames)
 
         video.release()
@@ -220,7 +221,7 @@ class FeatureExtractor:
 
         # Update the gradient values in the video data instance
         for i, frameNum in enumerate(frames):
-            data[frameNum].faceDistGradient = grad[i]
+            data[frameNum].faceDistGradient = gradients[i]
 
         ##############################################################
         # Indicate the conclusion

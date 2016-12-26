@@ -122,7 +122,7 @@ class VideoDataIterator:
         return self
 
     #---------------------------------------------
-    def next(self):
+    def __next__(self):
         """
         Access the next frame in the iteration.
 
@@ -232,3 +232,54 @@ class VideoData:
             in this class.
         """
         return VideoDataIterator(self)
+
+    #---------------------------------------------
+    def save(self, fileName):
+        """
+        Saves the contents of this instance object to the given file in the CSV
+        (Comma-Separated Values) format.
+
+        Parameters
+        ----------
+        fileName: str
+            Path and name of the file where to save the data.
+
+        Returns
+        -------
+        ret: bool
+            Indication on the success or failure of the saving.
+        """
+
+        # Open the file for writing
+        try:
+            file = open(fileName, 'w', newline='')
+        except IOError as e:
+            return False
+
+        writer = csv.writer(file, delimiter=',', quotechar='"',
+                            quoting=csv.QUOTE_MINIMAL)
+
+        # Write the header
+        header = ['frameNum', 'faceRegion.left', 'faceRegion.top',
+                  'faceRegion.right', 'faceRegion.bottom' ] + \
+                 list(np.array([['faceLandmarks.{:d}.x'.format(i),
+                            'faceLandmarks.{:d}.y'.format(i)]
+                            for i in range(68)]).reshape(-1)) + \
+                 ['faceDistance', 'faceDistanceGradient', 'emotions.neutral',
+                  'emotions.anger', 'emotions.contempt', 'emotions.disgust',
+                  'emotions.fear', 'emotions.happiness', 'emotions.sadness',
+                  'emotions.surprise', 'blinkCount', 'blinkRate']
+
+        writer.writerow(header)
+
+        for frame in self._frames:
+            row = [frame.frameNum, frame.faceRegion.left, frame.faceRegion.top,
+                   frame.faceRegion.right, frame.faceRegion.bottom] + \
+                  list(frame.faceLandmarks.reshape(-1)) + \
+                  [frame.faceDistance, frame.faceDistGradient] + \
+                  [p for _, p in frame.emotions] + \
+                  [frame.blinkCount, frame.blinkRate]
+            writer.writerow(row)
+
+        file.close()
+        return True
