@@ -46,7 +46,7 @@ class TaskObserver(BaseTaskObserver):
     """
 
     #---------------------------------------------
-    def __init__(self, videoFile, dataFile):
+    def __init__(self, videoFile, dataPath):
         """
         Class constructor.
 
@@ -54,11 +54,12 @@ class TaskObserver(BaseTaskObserver):
         ----------
         videoFile: str
             Path and name of the video file processed by this task.
-        dataFile: str
-            Path and name of the CSV file created with the extracted features.
+        dataPath: str
+            Path where to save the CSV files created with the extracted
+            features.
         """
         self._videoFile = videoFile
-        self._dataFile = dataFile
+        self._dataPath = dataPath
 
     #---------------------------------------------
     def error(self, errorType):
@@ -74,8 +75,8 @@ class TaskObserver(BaseTaskObserver):
             print('(ERROR): could not open video file: {}' \
                 .format(self._videoFile))
         elif errorType == ExtractionErrors.DataFileWriteError:
-            print('(ERROR): could not create the CSV file: {}' \
-                .format(self._dataFile))
+            print('(ERROR): could not create a CSV file in path: {}' \
+                .format(self._dataPath))
 
     #---------------------------------------------
     def progress(self, concluded, total):
@@ -115,43 +116,42 @@ def main(argv):
 
     # Get the files to process
     print('Collecting video files to process...')
-    files = []
+    params = []
     for dirpath, _, filenames in os.walk(args.videoPath):
         for f in filenames:
             parts = f.split('_')
 
-            #if parts[0] != 'player':
-            #    continue
-
-            videoFile = os.path.join(dirpath, f)
-            csv = '{}.csv'.format(os.path.splitext(f)[0])
-            csvFile = os.path.join(args.annotationPath, csv)
-
-            if os.path.isfile(csvFile):
-                print('Ignoring existing annotation: {}'.format(csvFile))
+            if parts[0] != 'player':
                 continue
 
-            files.append((videoFile, csvFile))
+            # For the case the user decides to save the csv files in the same
+            # path as the videos
+            if os.path.splitext(f)[1] == '.csv':
+                continue
+
+            videoFile = os.path.join(dirpath, f)
+            params.append((videoFile, args.annotationPath))
 
     print('Processing tasks...')
     pool = Pool()
-    pool.map(runTask, files)
+    pool.map(runTask, params)
 
 #---------------------------------------------
-def runTask(files):
+def runTask(args):
     """
     Runs a new task for the pair of files (video + csv).
 
     Parameters
     ----------
-    files: tuple
-        Pair of names of the files to process (the video file to read + the csv
-        file to create.)
+    args: tuple
+        Pair of names with the arguments of the task: the video file to read and
+        the path where to save the annotation files created.
     """
-    videoFile = files[0]
-    csvFile = files[1]
-    observer = TaskObserver(videoFile, csvFile)
-    task = FeatureExtractor(videoFile, csvFile, observer)
+    videoFile = args[0]
+    annotationPath = args[1]
+
+    observer = TaskObserver(videoFile, annotationPath)
+    task = FeatureExtractor(videoFile, annotationPath, observer)
     task.run()
 
 #---------------------------------------------

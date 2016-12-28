@@ -25,15 +25,17 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import os
 import csv
 from enum import Enum
 import cv2
 import numpy as np
 
 from fsdk.filters.gabor import GaborBank
-from fsdk.detectors.faces import Face
+from fsdk.detectors.faces import FaceDetector
 from fsdk.detectors.blinking import BlinkingDetector
 from fsdk.detectors.emotions import EmotionsDetector
+from fsdk.features.data import FaceData, GaborData, EmotionData, BlinkData
 from fsdk.features.data import FrameData, VideoData
 
 #=============================================
@@ -176,43 +178,56 @@ class FeatureExtractor:
         totalFrames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
 
         ##############################################################
-        # Create the CSV data to save the features extracted
+        # Create the CSV files to save the features extracted
         ##############################################################
 
-        # Open the text file for writing
+        # Create the names to save each CSV file
+        videoName = os.path.splitext(os.path.split(self._videoFile)[1])[0]
+        baseNames = ['face', 'gabor', 'emotions', 'blinks']
+        fileNames = {}
+        for baseName in baseNames:
+            fileNames[baseName] = '{}/{}-{}.csv' \
+                        .format(self._dataPath, videoName, baseName)
+
+        # Open the text files for writing
+        files = {}
         try:
-            file = open(self._dataFile, 'w', newline='')
+            for baseName, fileName in fileNames.items():
+                file = open(fileName, 'w', newline='')
+                files[baseName] = file
         except IOError as e:
             video.release()
+            for baseName, file in files.items():
+                file.close()
+                os.remove(fileNames[baseName])
             self._observer.error(ExtractionErrors.DataFileWriteError)
             return
 
-        # Create the CSV writer over the text file
-        writer = csv.writer(file, delimiter=',', quotechar='"',
-                            quoting=csv.QUOTE_MINIMAL)
+        # Create the CSV writers
+        writers = {}
+        for baseName, file in files.items():
+            writer = csv.writer(file, delimiter=',', quotechar='"',
+                                      quoting=csv.QUOTE_MINIMAL)
+            writers[baseName] = writer
 
-        # Write the header
-        writer.writerow(FrameData.header())
+        # Write the headers
+        writers['face'].writerow(['frame'] + FaceData.header())
+        writers['gabor'].writerow(['frame'] + GaborData.header())
+        writers['emotions'].writerow(['frame'] + EmotionData.header())
+        writers['blinks'].writerow(['frame'] + BlinkData.header())
 
         ##############################################################
         # Create the filters/detectors used in the feature extraction
         ##############################################################
 
-        gaborBank = GaborBank()
-        face = Face()
-        blinking = BlinkingDetector(fps)
-        emotions = EmotionsDetector()
-
+        gBank = GaborBank()
+        fcDet = FaceDetector()
+        bkDet = BlinkingDetector(fps)
+        emDet = EmotionsDetector()
 
         ##############################################################
         # Process each frame of the video to extract the data
         ##############################################################
-
-        # This list stores the frame data of the two previous frames processed.
-        # It is used to calculate the face distance gradient using a second
-        # order accurate central differences (a first difference is used on the
-        # edges - i.e. for the first and last frames).
-        procFrames = []
 
         # Process each frame of the video sequentially
         self._observer.progress(0, totalFrames)
@@ -223,60 +238,74 @@ class FeatureExtractor:
 
             # Detect the face on the current frame (and ignore frames where
             # no face was detected)
-            if not face.detect(frame, self._downSampling):
-                self._observer.progress(frameNum + 1, totalFrames)
-                continue
+            ret, face = fcDet.detect(frame, self._downSampling)
+            if ret:
+                # Filter the image with the bank of Gabor kernels and save the
+                # responses to the CSV file
+                cpFrame, cpFace = face.crop(frame)
+                responses = gBank.filter(cpFrame)
+                feats = emDet._relevantFeatures(responses, cpFace.landmarks)
+                gabor = GaborData(feats)
 
-            # Create a new frame data object to store the features extracted
-            # from the current frame
-            frameData = FrameData(frameNum)
+                # Detect the prototypical emotions and save to the CSV file
+                emotions = EmotionData(emDet.detect(cpFace, responses))
 
-            # Crop only the face region
-            frame, face = face.crop(frame)
-            frameData.faceRegion = face.region
-            frameData.faceLandmarks = face.landmarks
-            frameData.faceDistance = face.distance
+                # Detect blinking and save to the CSV file
+                bkDet.detect(frameNum, face)
+                blinks = BlinkData(len(bkDet.blinks), bkDet.bpm)
+            else:
+                face = FaceData()
+                gabor = GaborData()
+                emotions = EmotionData()
+                blinks = BlinkData()
 
-            # Detect the prototypical emotions
-            gaborResponses = gaborBank.filter(frame)
-            frameData.emotions = emotions.detect(face, gaborResponses)
-            feats = emotions._relevantFeatures(gaborResponses, face.landmarks)
-            frameData.faceGaborFeatures = feats
-
-            # Detect blinking
-            blinking.detect(frameNum, face)
-            frameData.blinkCount = len(blinking.blinks)
-            frameData.blinkRate = blinking.bpm
-
-            # Calculate the face distance gradient and save the frame data to
-            # the CSV file
-            procFrames.append(frameData)
-            l = len(procFrames)
-            if l == 2:
-                f0 = procFrames[0]
-                f1 = procFrames[1]
-                f0.faceDistGradient = (f1.faceDistance - f0.faceDistance)
-                writer.writerow(f0.toList())
-            elif l == 3:
-                f0 = procFrames[0]
-                f1 = procFrames[1]
-                f2 = procFrames[2]
-                f1.faceDistGradient = (f2.faceDistance - f0.faceDistance) / 2
-                writer.writerow(f1.toList())
-                del procFrames[0]
+            # Write the extracted data to the CSV files
+            writers['face'].writerow([frameNum] + face.toList())
+            writers['gabor'].writerow([frameNum] + gabor.toList())
+            writers['emotions'].writerow([frameNum] + emotions.toList())
+            writers['blinks'].writerow([frameNum] + blinks.toList())
 
             # Indicate the progress
             self._observer.progress(frameNum + 1, totalFrames)
 
-        # Calculate the gradient of the remaining frame
-        f0 = procFrames[0]
-        f1 = procFrames[1]
-        f1.faceDistGradient = (f1.faceDistance - f0.faceDistance)
-        writer.writerow(f1.toList())
-
         # Close the video and the CSV files
         video.release()
-        file.close()
+        for baseName, file in files.items():
+            file.close()
+
+        ##############################################################
+        # Calculate the distance gradient
+        ##############################################################
+
+        # Read the face data from the CSV file
+        with open(fileNames['face'], 'r+', newline='') as file:
+            reader = csv.reader(file, delimiter=',', quotechar='"',
+                                      quoting=csv.QUOTE_MINIMAL)
+            writer = csv.writer(file, delimiter=',', quotechar='"',
+                                      quoting=csv.QUOTE_MINIMAL)
+
+            # Read the data and build a list of distances
+            distances = []
+            faces = []
+            for row in reader:
+                if row[0] != 'frame':
+                    frameNum = int(row[0])
+                    face = FaceData()
+                    face.fromList(row[1:])
+                    faces.append([frameNum, face])
+                    distances.append(face.distance)
+
+            # Calculate the gradient from the list of distances
+            gradients = np.gradient(distances)
+
+            # Save the face data back to the CSV file
+            file.seek(0)
+            writer.writerow(['frame'] + FaceData.header())
+            for i, it in zip(range(len(faces)), faces):
+                frameNum = it[0]
+                face = it[1]
+                face.gradient = gradients[i]
+                writer.writerow([frameNum] + face.toList())
 
         ##############################################################
         # Conclude

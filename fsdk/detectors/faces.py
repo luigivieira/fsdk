@@ -138,7 +138,7 @@ class FaceDetector:
         # Detect faces in the image
         detectedFaces = FaceDetector._detector(detImage, 1)
         if len(detectedFaces) == 0:
-            return False
+            return False, None
 
         # No matter how many faces have been found, consider only the first one
         region = detectedFaces[0]

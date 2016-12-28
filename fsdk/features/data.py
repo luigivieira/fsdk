@@ -106,40 +106,63 @@ class FaceData:
     Indexes of the landmarks at the inner lip.
     """
 
-    def __init__(self, distance = 0, region = (), landmarks = []):
+    header = lambda: ['face.left', 'face.top',
+                      'face.right', 'face.bottom'] + \
+                      list(np.array([['face.landmark.{:d}.x'.format(i),
+                                      'face.landmark.{:d}.y'.format(i)]
+                                        for i in range(68)]).reshape(-1)) + \
+                     ['face.distance', 'face.gradient']
+
+    """
+    Helper static function to create the header useful for saving FaceData
+    instances to a CSV file.
+    """
+
+    def __init__(self, region = (), landmarks = [],
+                 distance = 0.0, gradient = 0.0):
         """
         Class constructor.
 
         Parameters
         ----------
-        distance: int
-            Estimated distance in centimeters of the face to the camera. The
-            default is 0.
         region: tuple
             Left, top, right and bottom coordinates of the region where the face
             is located in the image used for detection. The default is ().
         landmarks: list
             List of x, y coordinates of the 68 facial landmarks in the image
             used for detection. The default is [].
+        distance: float
+            Estimated distance in centimeters of the face to the camera. The
+            default is 0.0.
+        gradient: float
+            Gradient of the distance based on neighbor frames. The default is
+            0.0.
         """
 
-        self.distance = 0
-        """
-        Estimated distance in centimeters of the face to the camera.
-        """
-
-        self.region = ()
+        self.region = region
         """
         Region where the face is found in the image used for detection. This is
         a tuple of int values describing the region in terms of the top-left and
         bottom-right coordinates where the face is located.
         """
 
-        self.landmarks = []
+        self.landmarks = landmarks
         """
         Coordinates of the landmarks on the image. This is a numpy array of
         pair of values describing the x and y positions of each of the 68 facial
         landmarks.
+        """
+
+        self.distance = distance
+        """
+        Estimated distance in centimeters of the face to the camera.
+        """
+
+        self.gradient = gradient
+        """
+        Gradient of the distance based on neighbor frames. This value is not
+        updated by the face detector class. It is just used during the
+        extraction of features for the assessment of fun.
         """
 
     #---------------------------------------------
@@ -156,7 +179,8 @@ class FaceData:
         ret: FaceData
             New instance of the FaceDate class deep copied from this instance.
         """
-        return FaceData(self.distance, self.region, self.landmarks.copy())
+        return FaceData(self.region, self.landmarks.copy(),
+                        self.distance, self.gradient)
 
     #---------------------------------------------
     def isEmpty(self):
@@ -170,11 +194,7 @@ class FaceData:
         response: bool
             Indication on whether this object is empty.
         """
-
-        if len(self.region) == 0 and len(self.landmarks) == 0:
-            return True
-        else:
-            return False
+        return len(self.region) == 0 or len(self.landmarks) == 0
 
     #---------------------------------------------
     def crop(self, image):
@@ -284,126 +304,366 @@ class FaceData:
         return image
 
     #---------------------------------------------
-    def save(self, filename, confirmOverwrite = None):
+    def toList(self):
         """
-        Saves the face data to the given CSV file.
-
-        Saves the contents of this instance to the given text file in CSV
-        (Comma-Separated Values) format.
-
-        Parameters
-        ------
-        filename: str
-            Path and name of the CSV file to create with the Face data.
-        confirmOverwrite: bool
-            Indicates if the filename should be automatically overwritten in
-            case it already exists. If this argument is false, the user will be
-            requested to confirm overwriting if the file already exists. The
-            default is False.
+        Gets the contents of the FaceData as a list of values (useful to
+        write the data to a CSV file), in the order defined by header().
 
         Returns
-        ------
-        completion: bool
-            Indication if the saving was completed or not. In case of errors,
-            the method itself will output the proper error messages.
+        -------
+        ret: list
+            A list with all values of the this FaceData.
         """
-
         if self.isEmpty():
-            print('Can not save an empty Face object')
-            return False
-
-        # Check default arguments
-        if confirmOverwrite is None:
-            confirmOverwrite = False
-
-        # Check existing file should be overwritten
-        if not confirmOverwrite:
-            if os.path.isfile(filename):
-                print('The file {} already exists. Do you want to overwrite '
-                      'it? ([y]es/[n]o)'.format(filename))
-                answer = getChar().lower()
-                if answer == 'n':
-                    print('Operation cancelled by the user')
-                    return False
-
-        # Open the file for writing
-        try:
-            file = open(filename, 'w', newline='')
-        except IOError as e:
-            print('Could not write to file {}'.format(filename))
-            return False
-
-        writer = csv.writer(file, delimiter=',', quotechar='"',
-                            quoting=csv.QUOTE_MINIMAL)
-
-        # Write the header
-        header = ['face.left', 'face.top', 'face.right', 'face.bottom']
-        for i in range(68):
-            point = self.landmarks[i]
-            header.append('mark{:02d}.x'.format(i))
-            header.append('mark{:02d}.y'.format(i))
-        writer.writerow(header)
-
-        # Write the positions of the landmarks
-        row = [self.region[0], self.region[1], self.region[2], self.region[3]]
-        for point in self.landmarks:
-            row.append(point[0])
-            row.append(point[1])
-        writer.writerow(row)
-
-        file.close()
-        return True
+            ret = [0, 0, 0, 0] + \
+                  [0 for i in range(136)] + \
+                  [0.0, 0.0]
+        else:
+            ret = [self.region[0], self.region[1],
+                   self.region[2], self.region[3]] + \
+                   list(np.array(self.landmarks).reshape(-1)) + \
+                   [self.distance, self.gradient]
+        return ret
 
     #---------------------------------------------
-    def read(self, filename):
+    def fromList(self, values):
         """
-        Reads the face data from the given CSV file.
-
-        Reads the contents of this instance from the given text file in CSV
-        (Comma-Separated Values) format.
+        Sets the contents of the Face Data from a list of values (useful to
+        read the data from a CSV file, for instance), in the order defined by
+        the method header().
 
         Parameters
-        ------
-        filename: str
-            Path and name of the CSV file to read the face data from.
+        ----------
+        values: list
+            A list with all values of of this data. The values are expected
+            as strings (since they are probably read from a CSV file), so they
+            will be converted accordingly to the target types.
+
+        Exceptions
+        -------
+        exception: RuntimeError
+            Raised if the list has unexpected number of values.
+        exception: ValueError
+            Raised if any position in the list has an unexpected value/type.
+        """
+        if len(values) != len(FaceData.header()):
+            raise RuntimeError
+
+        self.region = (int(values[0]), int(values[1]),
+                       int(values[2]), int(values[3]))
+        self.landmarks = list(np.array(values[4:140], dtype=int).reshape(68, 2))
+        self.distance = float(values[140])
+        self.gradient = float(values[141])
+
+#=============================================
+class GaborData:
+    """
+    Represents the responses of the Gabor bank to the facial landmarks.
+    """
+
+    header = lambda: ['kernel.{:d}.landmark.{:d}'.format(k, i)
+                            for k in range(32)
+                            for i in range(68)]
+    """
+    Helper static function to create the header useful for saving GaborData
+    instances to a CSV file.
+    """
+
+    def __init__(self, features = []):
+        """
+        Class constructor.
+
+        Parameters
+        ----------
+        features: list
+            Responses of the filtering with the bank of Gabor kernels at each of
+            the facial landmarks. The default is [].
+        """
+        self.features = features
+        """
+        Responses of the filtering with the bank of Gabor kernels at each of the
+        facial landmarks. The Gabor bank used has 32 kernels and there are 68
+        landmarks, hence this is a vector of 2176 values (32 x 68).
+        """
+
+    #---------------------------------------------
+    def copy(self):
+        """
+        Deep copies the data of this object.
+
+        Deep copying means that no mutable attribute (like tuples or lists) in
+        the new copy will be shared with this instance. In that way, the two
+        copies can be changed independently.
+
+        Returns
+        -------
+        ret: GaborData
+            New instance of the GaborData class deep copied from this instance.
+        """
+        return GaborData(self.features.copy())
+
+    #---------------------------------------------
+    def isEmpty(self):
+        """
+        Check if the object is empty.
 
         Returns
         ------
-        completion: bool
-            Indication if the reading was completed or not. In case of errors,
-            the method itself will output the proper error messages.
+        response: bool
+            Indication on whether this object is empty.
+        """
+        return len(self.features) == 0
+
+    #---------------------------------------------
+    def toList(self):
+        """
+        Gets the contents of this object as a list of values (useful to
+        write the data to a CSV file), in the order defined by header().
+
+        Returns
+        -------
+        ret: list
+            A list with all values of the this GaborData.
+        """
+        if self.isEmpty():
+            ret = [0.0 for i in range(2176)]
+        else:
+            ret = self.features.copy()
+
+        return ret
+
+    #---------------------------------------------
+    def fromList(self, values):
+        """
+        Sets the contents of the Gabor Data from a list of values (useful to
+        read the data from a CSV file, for instance), in the order defined by
+        the method header().
+
+        Parameters
+        ----------
+        values: list
+            A list with all values of of this data. The values are expected
+            as strings (since they are probably read from a CSV file), so they
+            will be converted accordingly to the target types.
+
+        Exceptions
+        -------
+        exception: RuntimeError
+            Raised if the list has unexpected number of values.
+        exception: ValueError
+            Raised if any position in the list has an unexpected value/type.
+        """
+        if len(values) != len(GaborData.header()):
+            raise RuntimeError
+
+        self.features = [float(f) for f in values]
+
+#=============================================
+class EmotionData:
+    """
+    Represents the probabilities of the prototypic emotions detected on a frame.
+    """
+
+    header = lambda: ['emotion.neutral', 'emotion.anger', 'emotion.contempt',
+                      'emotion.disgust', 'emotion.fear', 'emotion.happiness',
+                      'emotion.sadness', 'emotion.surprise']
+    """
+    Helper static function to create the header useful for saving EmotionData
+    instances to a CSV file.
+    """
+
+    def __init__(self, emotions = {}):
+        """
+        Class constructor.
+
+        Parameters
+        ----------
+        emotions: dict
+            Dictionary with the probabilities of each prototypical emotion plus
+            the neutral face.
+        """
+        self.emotions = emotions
+        """
+        Dictionary with the probabilities of each prototypical emotion plus the
+        neutral face.
         """
 
-        # Open the file for reading and read all lines
-        try:
-            file = open(filename, 'r', newline='')
-        except IOError as e:
-            print('Could not read from file {}'.format(filename))
-            return False
+    #---------------------------------------------
+    def copy(self):
+        """
+        Deep copies the data of this object.
 
-        rows = list(csv.reader(file, delimiter=',', quotechar='"',
-                            quoting=csv.QUOTE_MINIMAL))
-        file.close()
+        Deep copying means that no mutable attribute (like tuples or lists) in
+        the new copy will be shared with this instance. In that way, the two
+        copies can be changed independently.
 
-        # Verify and import the content
-        # This file is supposed to have only two rows (the header and the data)
-        if len(rows) != 2:
-            print('The CSV file {} has a different number of rows than '
-                  'expected'.format(filename))
-            return False
+        Returns
+        -------
+        ret: EmotionData
+            New instance of the EmotionData class deep copied from this object.
+        """
+        return EmotionData(self.emotions.copy())
 
-        # This file is also supposed to have 140 columns (4 regions + 2 * 68
-        # coordinates - x and y)
-        row = rows[1]
-        if len(row) != 140:
-            print('The CSV file {} has a different format than expected'
-                  .format(filename))
-            return False
+    #---------------------------------------------
+    def isEmpty(self):
+        """
+        Check if the object is empty.
 
-        self.region = [int(i) for i in row[0:4]]
-        it = iter([int(i) for i in row[4:]])
-        self.landmarks = np.array(list(zip(it, it)))
-        return True
+        Returns
+        ------
+        response: bool
+            Indication on whether this object is empty.
+        """
+        return len(self.emotions) == 0
+
+    #---------------------------------------------
+    def toList(self):
+        """
+        Gets the contents of this object as a list of values (useful to
+        write the data to a CSV file), in the order defined by header().
+
+        Returns
+        -------
+        ret: list
+            A list with all values of the this EmotionData.
+        """
+        if self.isEmpty():
+            ret = [0.0 for i in range(7)]
+        else:
+            ret = [p for _, p in self.emotions.items()]
+
+        return ret
+
+    #---------------------------------------------
+    def fromList(self, values):
+        """
+        Sets the contents of the Emotion Data from a list of values (useful to
+        read the data from a CSV file, for instance), in the order defined by
+        the method header().
+
+        Parameters
+        ----------
+        values: list
+            A list with all values of of this data. The values are expected
+            as strings (since they are probably read from a CSV file), so they
+            will be converted accordingly to the target types.
+
+        Exceptions
+        -------
+        exception: RuntimeError
+            Raised if the list has unexpected number of values.
+        exception: ValueError
+            Raised if any position in the list has an unexpected value/type.
+        """
+        if len(values) != len(EmotionData.header()):
+            raise RuntimeError
+
+        for i, emotion, prob in zip(range(7), self.emotions.items()):
+            self.emotions[emotion] = float(values[i])
+
+#=============================================
+class BlinkData:
+    """
+    Represents the blinking information related to a frame of video.
+    """
+
+    header = lambda: ['blink.count', 'blink.rate']
+    """
+    Helper static function to create the header useful for saving BlinkData
+    instances to a CSV file.
+    """
+
+    def __init__(self, count = 0, rate = 0):
+        """
+        Class constructor.
+
+        Parameters
+        ----------
+        count: int
+            Total number of blinks detected until this frame of the video. The
+            default is 0.
+        rate: int
+            Blinking rate (in blinks per minute) accounted until this frame of
+            the video. The default is 0.
+        """
+        self.count = count
+        """
+        Total number of blinks detected until this frame of the video.
+        """
+
+        self.rate = rate
+        """
+        Blinking rate (in blinks per minute) accounted until this frame of the
+        video.
+        """
+
+    #---------------------------------------------
+    def copy(self):
+        """
+        Deep copies the data of this object.
+
+        Deep copying means that no mutable attribute (like tuples or lists) in
+        the new copy will be shared with this instance. In that way, the two
+        copies can be changed independently.
+
+        Returns
+        -------
+        ret: BlinkData
+            New instance of the BlinkData class deep copied from this instance.
+        """
+        return BlinkData(self.count, self.rate)
+
+    #---------------------------------------------
+    def isEmpty(self):
+        """
+        Check if the object is empty.
+
+        Returns
+        ------
+        response: bool
+            Indication on whether this object is empty.
+        """
+        return self.count == 0 or self.rate == 0
+
+    #---------------------------------------------
+    def toList(self):
+        """
+        Gets the contents of this object as a list of values (useful to
+        write the data to a CSV file), in the order defined by header().
+
+        Returns
+        -------
+        ret: list
+            A list with all values of the this GaborData.
+        """
+        return [self.count, self.rate]
+
+    #---------------------------------------------
+    def fromList(self, values):
+        """
+        Sets the contents of the Blink Data from a list of values (useful to
+        read the data from a CSV file, for instance), in the order defined by
+        the method header().
+
+        Parameters
+        ----------
+        values: list
+            A list with all values of of this data. The values are expected
+            as strings (since they are probably read from a CSV file), so they
+            will be converted accordingly to the target types.
+
+        Exceptions
+        -------
+        exception: RuntimeError
+            Raised if the list has unexpected number of values.
+        exception: ValueError
+            Raised if any position in the list has an unexpected value/type.
+        """
+        if len(values) != len(BlinkData.header()):
+            raise RuntimeError
+
+        self.count = int(values[0])
+        self.rate = int(values[1])
 
 #=============================================
 class FrameData:
@@ -412,16 +672,9 @@ class FrameData:
     for the assessment of fun.
     """
 
-    header = lambda: ['frame', 'left', 'top', 'right', 'bottom'] + \
-                     list(np.array([['mark.{:d}.x'.format(i),
-                                     'mark.{:d}.y'.format(i)]
-                                    for i in range(68)]).reshape(-1)) + \
-                     ['gabor.{:d}.{:d}'.format(k, i)
-                            for k in range(32)
-                            for i in range(68)] + \
-                     ['distance', 'gradient', 'neutral', 'anger', 'contempt',
-                      'disgust', 'fear', 'happiness', 'sadness', 'surprise',
-                      'blinks', 'rate']
+    header = lambda: ['frame'] + \
+                     FaceData.header() + GaborData.header() + \
+                     EmotionData.header() + BlinkData.header()
     """
     Helper static function to create the header for storing frames of data.
     """
@@ -442,51 +695,42 @@ class FrameData:
         Number of the frame to which the data belongs to.
         """
 
-        self.faceRegion = ()
+        self.face = FaceData()
         """
-        Left, top, right and bottom coordinates of the facial region detected in
-        this frame.
-        """
-
-        self.faceLandmarks = np.array([])
-        """
-        Positions of the facial landmarks detected in this frame.
+        Face detected in this frame.
         """
 
-        self.faceDistance = 0
+        self.gabor = GaborData()
         """
-        Estimated distance in centimeters of the face to the camera in this
-        frame.
-        """
-
-        self.faceDistGradient = 0
-        """
-        Gradient of the face distance in this frame, considering a window of
-        size 3 (a mask [-1, 0, 1] centered at the current frame).
+        Gabor responses extracted from the face detected in this frame.
         """
 
-        self.faceGaborFeatures = np.array([])
-        """
-        Responses of the filtering with the bank ofGabor kernels at each of the
-        facial landmarks. The Gabor bank used has 32 kernels and there are 68
-        landmarks, hence this is a vector of 2176 features (32 x 68).
-        """
-
-        self.emotions = OrderedDict()
+        self.emotions = EmotionData()
         """
         Probabilities of the prototypical emotions detected in this frame.
         """
 
-        self.blinkCount = 0
+        self.blinks = BlinkData()
         """
-        Total number of blinks accounted in the video up to this frame.
+        Blinking information accounted until this frame.
         """
 
-        self.blinkRate = 0
+    #---------------------------------------------
+    def toList(self):
         """
-        Blink rate (in blinks per minute) accounted in the last minute of the
-        video before this frame.
+        Gets the contents of the Frame Data as a list of values (useful to
+        write the data to a CSV file, for instance), in the order defined by
+        the method header().
+
+        Returns
+        -------
+        ret: list
+            A list with all values of the frame data.
         """
+        ret = [self.frameNum] + \
+              self.face.toList() + self.gabor.toList() + \
+              self.emotions.toList() + self.blinks.toList()
+        return ret
 
     #---------------------------------------------
     def fromList(self, values):
@@ -498,7 +742,7 @@ class FrameData:
         Parameters
         ----------
         values: list
-            A list with all values of the frame data. The values are expected
+            A list with all values of of this data. The values are expected
             as strings (since they are probably read from a CSV file), so they
             will be converted accordingly to the target types.
 
@@ -513,43 +757,22 @@ class FrameData:
             raise RuntimeError
 
         self.frameNum = int(values[0])
-        self.faceRegion = (int(values[1]), int(values[2]),
-                           int(values[3]), int(values[4]))
-        self.faceLandmarks = np.array(values[5:141], dtype=int).reshape(68, 2)
-        self.faceGaborFeatures = [float(i) for i in values[141:2317]]
-        self.faceDistance = float(values[2317])
-        self.faceDistGradient = float(values[2318])
-        self.emotions = OrderedDict([('neutral',   float(values[2319])),
-                                     ('anger',     float(values[2320])),
-                                     ('contempt',  float(values[2321])),
-                                     ('disgust',   float(values[2322])),
-                                     ('fear',      float(values[2323])),
-                                     ('happiness', float(values[2324])),
-                                     ('sadness',   float(values[2325])),
-                                     ('surprise',  float(values[2326]))])
-        self.blinkCount = int(values[2327])
-        self.blinkRate = int(values[2328])
 
-    #---------------------------------------------
-    def toList(self):
-        """
-        Gets the contents of the Frame Data as a list of values (useful to
-        write the data to a CSV file, for instance), in the order defined by
-        the method header().
+        start = 1
+        end = start + len(FaceData.header())
+        self.face.fromList(values[start:end])
 
-        Returns
-        -------
-        ret: list
-            A list with all values of the frame data.
-        """
-        ret = [self.frameNum, self.faceRegion[0], self.faceRegion[1],
-              self.faceRegion[2], self.faceRegion[3]] + \
-              list(self.faceLandmarks.reshape(-1)) + \
-              self.faceGaborFeatures + \
-              [self.faceDistance, self.faceDistGradient] + \
-              [p for _, p in self.emotions.items()] + \
-              [self.blinkCount, self.blinkRate]
-        return ret
+        start = end
+        end = start + len(GaborData.header())
+        self.gabor.fromList(values[start:end])
+
+        start = end
+        end = start + len(EmotionData.header())
+        self.emotions.fromList(values[start:end])
+
+        start = end
+        end = start + len(BlinkData.header())
+        self.blinks.fromList(values[start:end])
 
 #=============================================
 class VideoDataIterator:
