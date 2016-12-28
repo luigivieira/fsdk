@@ -37,7 +37,8 @@ if __name__ == '__main__':
     sys.path.append('../../')
 
 from fsdk.filters.gabor import GaborBank
-from fsdk.detectors.faces import Face
+from fsdk.features.data import FaceData
+from fsdk.detectors.faces import FaceDetector
 from fsdk.detectors.blinking import BlinkingDetector
 from fsdk.detectors.emotions import EmotionsDetector
 
@@ -78,7 +79,7 @@ def main(argv):
     emotionsDetector = EmotionsDetector()
 
     # Features of the eyes
-    eyeFeatures = Face._leftEye + Face._rightEye
+    eyeFeatures = FaceData._leftEye + FaceData._rightEye
 
     # Text settings
     fontFace = cv2.FONT_HERSHEY_SIMPLEX
@@ -101,20 +102,18 @@ def main(argv):
                 break
             frameNum +=1
 
-            face = Face()
-            face.detect(frame, 4)
+            faceDetector = FaceDetector()
+            ret, face = faceDetector.detect(frame, 4)
 
-            if not face.isEmpty():
+            if ret:
 
                 # Crop only the face region
                 croppedFrame, croppedFace = face.crop(frame)
 
                 # Detect emotions
-                #responses = bank.filter(croppedFrame)
-                #features = emotionsDetector.relevantFeatures(responses,
-                #                                        croppedFace.landmarks)
-                #emotions = emotionsDetector.detect(features)
-                #drawEmotionInfo(emotions, frame)
+                responses = bank.filter(croppedFrame)
+                emotions = emotionsDetector.detect(croppedFace, responses)
+                drawEmotionInfo(emotions, frame)
 
                 # Detect blinks
                 blinkingDetector.detect(frameNum, croppedFace)
@@ -125,7 +124,7 @@ def main(argv):
 
                 print('Distance (in centimeters): {:.2f}'.format(face.distance))
 
-                #frame = face.draw(frame)
+                frame = face.draw(frame)
             else:
                 text = 'No Face Detected!'
                 textSize, _ = cv2.getTextSize(text, fontFace, fontScale, thickness)
@@ -173,9 +172,17 @@ def drawEmotionInfo(emotions, image):
     thickness = 1
     black = (0, 0, 0)
     white = (255, 255, 255)
+    red = (0, 0, 255)
 
     i = 1
+    em = max(emotions, key=lambda i: emotions[i])
     for emotion, probability in emotions.items():
+
+        if em == emotion:
+            color = red
+        else:
+            color = black
+
         text = '{}:'.format(emotion)
         textSize, _ = cv2.getTextSize(text, fontFace, fontScale, thickness)
 
@@ -183,17 +190,13 @@ def drawEmotionInfo(emotions, image):
         y = i * textSize[1] * 2
         i += 1
 
-        cv2.putText(image, text, (x, y), fontFace, fontScale, black, thickness * 3)
-        cv2.putText(image, text, (x, y), fontFace, fontScale, white, thickness)
+        cv2.putText(image, text, (x,y), fontFace, fontScale, color, thickness*3)
+        cv2.putText(image, text, (x,y), fontFace, fontScale, white, thickness)
 
-        x += textSize[0] + 40
-        y -= textSize[1]
-
-        w = 40
-        h = 10
-
-        cv2.rectangle(image, (x, y), (x + w, y + h), white)
-
+        x = 120
+        text = '{:.2f}'.format(probability)
+        cv2.putText(image, text, (x,y), fontFace, fontScale, color, thickness*3)
+        cv2.putText(image, text, (x,y), fontFace, fontScale, white, thickness)
 
 #---------------------------------------------
 def drawBlinkInfo(blinks, bpm, image):

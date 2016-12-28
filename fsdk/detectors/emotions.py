@@ -40,7 +40,8 @@ if __name__ == '__main__':
     sys.path.append('../../')
 
 from fsdk.filters.gabor import GaborBank
-from fsdk.detectors.faces import Face
+from fsdk.features.data import FaceData
+from fsdk.detectors.faces import FaceDetector
 import fsdk.ui as ui
 
 #=============================================
@@ -150,7 +151,7 @@ class EmotionsDetector:
         """
 
         # Get the 32 responses at the positions of all the face landmarks
-        points = facialLandmarks
+        points = np.array(facialLandmarks)
         responses = gaborResponses[:, points[:,1], points[:,0]]
 
         # Reshape the bi-dimensional matrix to a single dimension
@@ -165,9 +166,9 @@ class EmotionsDetector:
 
         Parameters
         ----------
-        face: Face
-            Instance of the Face object with the facial landmarks detected on
-            the facial image.
+        face: FaceData
+            Instance of the FaceData object with the facial landmarks detected
+            on the facial image.
         gaborResponses: numpy.array
             Matrix of responses to the bank of Gabor kernels applied to the face
             region of an image. The first dimension of this matrix has size 32,
@@ -330,8 +331,9 @@ class EmotionsDetector:
                 continue
 
             # Detect the face on the image
-            face = Face()
-            if not face.detect(image):
+            faceDetector = FaceDetector()
+            ret, face = faceDetector.detect(image)
+            if not ret:
                 ignoredFiles.append(sample)
                 continue
 

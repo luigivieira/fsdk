@@ -25,12 +25,14 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import sys
+import os
 import argparse
 import cv2
 import numpy as np
+from multiprocessing import Pool, TimeoutError
 
 if __name__ == '__main__':
-    import sys
     sys.path.append('../../')
 
 from fsdk.features.extraction import FeatureExtractor, BaseTaskObserver
@@ -111,8 +113,45 @@ def main(argv):
     # Parse the command line
     args = parseCommandLine(argv)
 
-    observer = TaskObserver(args.video, args.csv)
-    task = FeatureExtractor(args.video, args.csv, observer)
+    # Get the files to process
+    print('Collecting video files to process...')
+    files = []
+    for dirpath, _, filenames in os.walk(args.videoPath):
+        for f in filenames:
+            parts = f.split('_')
+
+            #if parts[0] != 'player':
+            #    continue
+
+            videoFile = os.path.join(dirpath, f)
+            csv = '{}.csv'.format(os.path.splitext(f)[0])
+            csvFile = os.path.join(args.annotationPath, csv)
+
+            if os.path.isfile(csvFile):
+                print('Ignoring existing annotation: {}'.format(csvFile))
+                continue
+
+            files.append((videoFile, csvFile))
+
+    print('Processing tasks...')
+    pool = Pool()
+    pool.map(runTask, files)
+
+#---------------------------------------------
+def runTask(files):
+    """
+    Runs a new task for the pair of files (video + csv).
+
+    Parameters
+    ----------
+    files: tuple
+        Pair of names of the files to process (the video file to read + the csv
+        file to create.)
+    """
+    videoFile = files[0]
+    csvFile = files[1]
+    observer = TaskObserver(videoFile, csvFile)
+    task = FeatureExtractor(videoFile, csvFile, observer)
     task.run()
 
 #---------------------------------------------
@@ -140,11 +179,14 @@ def parseCommandLine(argv):
                                      'to the assessment of fun in the FSDK '
                                      'project.')
 
-    parser.add_argument('video',
-                        help='Video file from where to extract the features.')
+    parser.add_argument('videoPath',
+                        help='Path from where to get the videos to process.')
 
-    parser.add_argument('csv',
-                        help='CSV file to create with the features extracted.')
+    parser.add_argument('annotationPath',
+                        help='Path to where save the CSV files created with '
+                        'the extracted features. The features are saved with '
+                        'the same name of the video files, but with extension '
+                        '`.csv`.')
 
     return parser.parse_args()
 

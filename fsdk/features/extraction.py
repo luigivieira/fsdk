@@ -104,7 +104,7 @@ class FeatureExtractor:
     """
 
     #---------------------------------------------
-    def __init__(self, videoFile, dataFile, observer, downSampling = 4):
+    def __init__(self, videoFile, dataPath, observer, downSampling = 4):
         """
         Class constructor.
 
@@ -112,9 +112,8 @@ class FeatureExtractor:
         ----------
         videoFile: str
             Path and name of the video file to process.
-        dataFile: str
-            Path and name of the CSV file to save the data of the features
-            extracted.
+        dataPath: str
+            Path where to create the CSV files with the features extracted.
         observer: TaskObserver
             Instance of a TaskObserver to receive the notifications produced
             during execution.
@@ -129,9 +128,9 @@ class FeatureExtractor:
         Name of the video file to be processed for feature extraction.
         """
 
-        self._dataFile = dataFile
+        self._dataPath = dataPath
         """
-        Name of the CSV file to save the data of the features extracted.
+        Path where to save the CSV files with the features extracted.
         """
 
         self._observer = observer
@@ -204,9 +203,16 @@ class FeatureExtractor:
         blinking = BlinkingDetector(fps)
         emotions = EmotionsDetector()
 
+
         ##############################################################
         # Process each frame of the video to extract the data
         ##############################################################
+
+        # This list stores the frame data of the two previous frames processed.
+        # It is used to calculate the face distance gradient using a second
+        # order accurate central differences (a first difference is used on the
+        # edges - i.e. for the first and last frames).
+        procFrames = []
 
         # Process each frame of the video sequentially
         self._observer.progress(0, totalFrames)
@@ -242,35 +248,35 @@ class FeatureExtractor:
             frameData.blinkCount = len(blinking.blinks)
             frameData.blinkRate = blinking.bpm
 
-            # Write the frame to a new row on the CSV file
-            writer.writerow(frameData.toList())
+            # Calculate the face distance gradient and save the frame data to
+            # the CSV file
+            procFrames.append(frameData)
+            l = len(procFrames)
+            if l == 2:
+                f0 = procFrames[0]
+                f1 = procFrames[1]
+                f0.faceDistGradient = (f1.faceDistance - f0.faceDistance)
+                writer.writerow(f0.toList())
+            elif l == 3:
+                f0 = procFrames[0]
+                f1 = procFrames[1]
+                f2 = procFrames[2]
+                f1.faceDistGradient = (f2.faceDistance - f0.faceDistance) / 2
+                writer.writerow(f1.toList())
+                del procFrames[0]
 
             # Indicate the progress
             self._observer.progress(frameNum + 1, totalFrames)
 
+        # Calculate the gradient of the remaining frame
+        f0 = procFrames[0]
+        f1 = procFrames[1]
+        f1.faceDistGradient = (f1.faceDistance - f0.faceDistance)
+        writer.writerow(f1.toList())
+
         # Close the video and the CSV files
         video.release()
         file.close()
-
-        ##############################################################
-        # Update the gradients of the face distances
-        ##############################################################
-
-        # Read all the data saved
-        data = VideoData()
-        data.read(self._dataFile)
-
-        # Calculate the gradients
-        frames = [frame.frameNum for frame in data]
-        distances = [frame.faceDistance for frame in data]
-        gradients = np.gradient(distances)
-
-        # Update the gradient values in the video data instance
-        for i, frameNum in enumerate(frames):
-            data[frameNum].faceDistGradient = gradients[i]
-
-        # Save it back to the file
-        data.save(self._dataFile)
 
         ##############################################################
         # Conclude

@@ -26,7 +26,7 @@
 # SOFTWARE.
 
 import numpy as np
-from fsdk.detectors.faces import Face
+from fsdk.features.data import FaceData
 
 #=============================================
 class BlinkingDetector:
@@ -94,7 +94,7 @@ class BlinkingDetector:
         frameNum: int
             Number of the frame being processed.
 
-        face: Face
+        face: FaceData
             Face object with the face landmarks and region detected on the
             frame being processed.
 
@@ -161,9 +161,11 @@ class BlinkingDetector:
             value is, the most probable is that a blink happened.
         """
 
+        landmarks = np.array(landmarks)
+
         # Calculate the average displacement of all the eye features from the
         # last frame
-        eyeFeatures = Face._leftEye + Face._rightEye
+        eyeFeatures = FaceData._leftEye + FaceData._rightEye
         totalDisp = 0
         for feature in eyeFeatures:
             d = np.linalg.norm(landmarks[feature] - self._landmarks[feature])
@@ -172,7 +174,7 @@ class BlinkingDetector:
 
         # Calculate the average displacement of all the nose features from the
         # last frame
-        noseFeatures = Face._noseBridge + Face._lowerNose
+        noseFeatures = FaceData._noseBridge + FaceData._lowerNose
         totalDisp = 0
         for feature in noseFeatures:
             d = np.linalg.norm(landmarks[feature] - self._landmarks[feature])
@@ -211,9 +213,11 @@ class BlinkingDetector:
             a movement upwards.
         """
 
+        landmarks = np.array(landmarks)
+
         # Get the landmarks of the upper and lower eyelids of both eyes
-        upperEyelid = Face._rightUpperEyelid + Face._leftUpperEyelid
-        lowerEyelid = Face._rightLowerEyelid + Face._leftLowerEyelid
+        upperEyelid = FaceData._rightUpperEyelid + FaceData._leftUpperEyelid
+        lowerEyelid = FaceData._rightLowerEyelid + FaceData._leftLowerEyelid
 
         # Calculate the average distance between the upper and lower eyelids of
         # both eyes in the last frame
@@ -263,7 +267,7 @@ class BlinkingDetector:
         self._lastResponse = blinkDetected
 
         # Save the landmarks of current frame
-        self._landmarks = landmarks
+        self._landmarks = np.array(landmarks)
 
         # Calculate the frame time in seconds
         frameTime = frameNum / self._fps
