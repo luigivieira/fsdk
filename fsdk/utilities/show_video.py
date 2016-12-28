@@ -214,16 +214,18 @@ def drawBlinkInfo(blinks, bpm, image):
     """
 
     fontFace = cv2.FONT_HERSHEY_SIMPLEX
-    fontScale = 1
+    fontScale = 0.5
     thickness = 1
-    color = (255, 255, 255)
+    white = (255, 255, 255)
+    black = (0, 0, 0)
 
     text = 'Total blinks: {:d} (blinks per minute: {:d})'.format(blinks, bpm)
     textSize, _ = cv2.getTextSize(text, fontFace, fontScale, thickness)
 
     x = image.shape[1] // 2 - textSize[0] // 2
     y = textSize[1]
-    cv2.putText(image, text, (x, y), fontFace, fontScale, color, thickness)
+    cv2.putText(image, text, (x,y), fontFace, fontScale, black, thickness*3)
+    cv2.putText(image, text, (x, y), fontFace, fontScale, white, thickness)
 
 #---------------------------------------------
 def parseCommandLine(argv):
