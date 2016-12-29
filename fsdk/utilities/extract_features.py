@@ -29,6 +29,7 @@ import sys
 import os
 import argparse
 import cv2
+import time
 import numpy as np
 from multiprocessing import Pool, TimeoutError
 
@@ -60,6 +61,7 @@ class TaskObserver(BaseTaskObserver):
         """
         self._videoFile = videoFile
         self._dataPath = dataPath
+        self._start = time.time()
 
     #---------------------------------------------
     def error(self, errorType):
@@ -98,7 +100,8 @@ class TaskObserver(BaseTaskObserver):
         """
         Indicates the conclusion of the extraction task.
         """
-        print('{} concluded.'.format(self._videoFile))
+        elapsed = time.time() - self._start
+        print('{} concluded ({} segundos).'.format(self._videoFile, elapsed))
 
 #---------------------------------------------
 def main(argv):

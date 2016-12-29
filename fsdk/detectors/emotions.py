@@ -152,7 +152,26 @@ class EmotionsDetector:
 
         # Get the 32 responses at the positions of all the face landmarks
         points = np.array(facialLandmarks)
-        responses = gaborResponses[:, points[:,1], points[:,0]]
+
+        # Try to get the responses for all points. If an exception is caught,
+        # it is because some landmarks are out of the image area (i.e. the face
+        # is partially occluded, but it was still possible to detect). In this
+        # case, assume 0.0 for the responses of the landmarks outside the image
+        # area.
+        try:
+            responses = gaborResponses[:, points[:, 1], points[:, 0]]
+        except:
+            w = gaborResponses.shape[2]
+            h = gaborResponses.shape[1]
+
+            responses = np.zeros((32, 68), dtype=float)
+            for i in range(len(points)):
+                x = points[i][0]
+                y = points[i][1]
+                if x < w and y < h:
+                    responses[:, i] = gaborResponses[:, y, x]
+                else:
+                    responses[:, i] = 0.0
 
         # Reshape the bi-dimensional matrix to a single dimension
         featureVector = responses.reshape(-1).tolist()
