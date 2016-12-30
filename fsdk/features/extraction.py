@@ -30,6 +30,7 @@ import csv
 from enum import Enum
 import cv2
 import numpy as np
+from collections import OrderedDict
 
 from fsdk.filters.gabor import GaborBank
 from fsdk.detectors.faces import FaceDetector
@@ -285,26 +286,33 @@ class FeatureExtractor:
                                       quoting=csv.QUOTE_MINIMAL)
 
             # Read the data and build a list of distances
+            frames = []
             distances = []
-            faces = []
+            faces = OrderedDict()
             for row in reader:
                 if row[0] != 'frame':
+                    # Read the face data from the CSV file
                     frameNum = int(row[0])
                     face = FaceData()
                     face.fromList(row[1:])
-                    faces.append([frameNum, face])
-                    distances.append(face.distance)
+                    faces[frameNum] = face
+
+                    # Consider for the calculation only the non-empty faces
+                    # (i.e. the frames where a face was detected)
+                    if not face.isEmpty():
+                        frames.append(frameNum)
+                        distances.append(face.distance)
 
             # Calculate the gradient from the list of distances
             gradients = np.gradient(distances)
+            for i, frameNum in enumerate(frames):
+                faces[frameNum].gradient = gradients[i]
 
             # Save the face data back to the CSV file
+            file.truncate(0)
             file.seek(0)
             writer.writerow(['frame'] + FaceData.header())
-            for i, it in zip(range(len(faces)), faces):
-                frameNum = it[0]
-                face = it[1]
-                face.gradient = gradients[i]
+            for frameNum, face in faces.items():
                 writer.writerow([frameNum] + face.toList())
 
         ##############################################################

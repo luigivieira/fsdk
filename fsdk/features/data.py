@@ -118,7 +118,8 @@ class FaceData:
     instances to a CSV file.
     """
 
-    def __init__(self, region = (), landmarks = [],
+    def __init__(self, region = (0.0, 0.0, 0.0, 0.0),
+                 landmarks = [0 for i in range(136)],
                  distance = 0.0, gradient = 0.0):
         """
         Class constructor.
@@ -127,10 +128,10 @@ class FaceData:
         ----------
         region: tuple
             Left, top, right and bottom coordinates of the region where the face
-            is located in the image used for detection. The default is ().
+            is located in the image used for detection. The default is all 0's.
         landmarks: list
             List of x, y coordinates of the 68 facial landmarks in the image
-            used for detection. The default is [].
+            used for detection. The default is all 0's.
         distance: float
             Estimated distance in centimeters of the face to the camera. The
             default is 0.0.
@@ -187,14 +188,15 @@ class FaceData:
         """
         Check if the FaceData object is empty.
 
-        An empty FaceData object have no region and no landmarks.
+        An empty FaceData object have region and landmarks with all 0's.
 
         Returns
         ------
         response: bool
             Indication on whether this object is empty.
         """
-        return len(self.region) == 0 or len(self.landmarks) == 0
+        return all(v == 0 for v in self.region) or \
+               all(vx == 0 and vy == 0 for vx, vy in self.landmarks)
 
     #---------------------------------------------
     def crop(self, image):
@@ -314,15 +316,10 @@ class FaceData:
         ret: list
             A list with all values of the this FaceData.
         """
-        if self.isEmpty():
-            ret = [0, 0, 0, 0] + \
-                  [0 for i in range(136)] + \
-                  [0.0, 0.0]
-        else:
-            ret = [self.region[0], self.region[1],
-                   self.region[2], self.region[3]] + \
-                   list(np.array(self.landmarks).reshape(-1)) + \
-                   [self.distance, self.gradient]
+        ret = [self.region[0], self.region[1],
+               self.region[2], self.region[3]] + \
+               list(np.array(self.landmarks).reshape(-1)) + \
+               [self.distance, self.gradient]
         return ret
 
     #---------------------------------------------
@@ -369,7 +366,7 @@ class GaborData:
     instances to a CSV file.
     """
 
-    def __init__(self, features = []):
+    def __init__(self, features = [0.0 for i in range(2176)]):
         """
         Class constructor.
 
@@ -377,7 +374,7 @@ class GaborData:
         ----------
         features: list
             Responses of the filtering with the bank of Gabor kernels at each of
-            the facial landmarks. The default is [].
+            the facial landmarks. The default is all 0's.
         """
         self.features = features
         """
@@ -412,7 +409,7 @@ class GaborData:
         response: bool
             Indication on whether this object is empty.
         """
-        return len(self.features) == 0
+        return all(v == 0 for v in self.features)
 
     #---------------------------------------------
     def toList(self):
@@ -425,11 +422,7 @@ class GaborData:
         ret: list
             A list with all values of the this GaborData.
         """
-        if self.isEmpty():
-            ret = [0.0 for i in range(2176)]
-        else:
-            ret = self.features.copy()
-
+        ret = self.features.copy()
         return ret
 
     #---------------------------------------------
@@ -472,7 +465,11 @@ class EmotionData:
     instances to a CSV file.
     """
 
-    def __init__(self, emotions = {}):
+    def __init__(self, emotions = OrderedDict([
+                        ('neutral', 0.0), ('anger', 0.0), ('contempt', 0.0),
+                        ('disgust', 0.0), ('fear', 0.0),  ('happiness', 0.0),
+                        ('sadness', 0.0), ('surprise', 0.0)
+                 ])):
         """
         Class constructor.
 
@@ -480,7 +477,8 @@ class EmotionData:
         ----------
         emotions: dict
             Dictionary with the probabilities of each prototypical emotion plus
-            the neutral face.
+            the neutral face. The default is a dictionary with all probabilities
+            equal to 0.0.
         """
         self.emotions = emotions
         """
@@ -514,7 +512,7 @@ class EmotionData:
         response: bool
             Indication on whether this object is empty.
         """
-        return len(self.emotions) == 0
+        return all(v == 0 for _, v in self.emotions.items())
 
     #---------------------------------------------
     def toList(self):
@@ -527,11 +525,7 @@ class EmotionData:
         ret: list
             A list with all values of the this EmotionData.
         """
-        if self.isEmpty():
-            ret = [0.0 for i in range(7)]
-        else:
-            ret = [p for _, p in self.emotions.items()]
-
+        ret = [p for _, p in self.emotions.items()]
         return ret
 
     #---------------------------------------------
