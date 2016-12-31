@@ -28,11 +28,12 @@
 import os
 import sys
 import cv2
+from enum import Enum
+from datetime import datetime
 
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
-from PyQt5.QtMultimedia import *
 
 #=============================================
 class MainWindow(QMainWindow):
@@ -77,11 +78,12 @@ class MainWindow(QMainWindow):
         self._helpAbout = self._helpMenu.addAction(self.tr('&About...'))
         self._helpAbout.triggered.connect(self._showAbout)
 
-        self._video = VideoWidget(self)
-        self.setCentralWidget(self._video)
+        # Create the video player and run it in another thread
+        self._player = VideoPlayer(self)
 
-        self._player = QMediaPlayer(self)
-        self._player.setVideoOutput(self._video._surface)
+        # Create the Video Widget
+        #self._video = VideoWidget(self)
+        #self.setCentralWidget(self._video)
 
         ##############################################
         # Load the window settings
@@ -112,6 +114,8 @@ class MainWindow(QMainWindow):
         """
         Handles the close event of the window
         """
+
+        self._player.terminate()
 
         ##############################################
         # Save the window settings
@@ -145,9 +149,10 @@ class MainWindow(QMainWindow):
         if ext == '.yaml':
             pass
         else:
-            media = QMediaContent(QUrl.fromLocalFile(fileName))
-            self._player.setMedia(media)
-            self._player.play()
+            if self._player.open(fileName):
+                self._player.play()
+            else:
+                print('Oops!')
 
         return True
 
@@ -285,6 +290,342 @@ class AboutWindow(QDialog):
         self.move(x, y)
 
 #=============================================
+class MediaStatus(Enum):
+    """
+    Defines the possible media statuses of the VideoPlayer.
+    """
+
+    Closed = 1
+    """
+    Indicates that there is no video opened in the VideoPlayer.
+    """
+
+    Opened = 2
+    """
+    Indicates that there is a video opened in the VideoPlayer.
+    """
+
+#=============================================
+class PlaybackStatus(Enum):
+    """
+    Defines the possible playback statuses of the VideoPlayer.
+    """
+
+    Stopped = 1
+    """
+    Indicates that the video is stopped.
+    """
+
+    Playing = 2
+    """
+    Indicates that the video is being played.
+    """
+
+    Paused = 3
+    """
+    Indicates that the video is paused.
+    """
+
+#=============================================
+class VideoPlayer(QThread):
+    """
+    Implements a video player based on VideoCapturer from OpenCV.
+    """
+
+    #---------------------------------------------
+    def __init__(self, parent):
+        """
+        Class constructor.
+
+        Parameters
+        ----------
+        parent: QWidget
+            Parent widget, which will also draw the video output produced by
+            this surface.
+        """
+        super(VideoPlayer, self).__init__(parent)
+
+        self._lock = QReadWriteLock()
+        """
+        Smart mutex used for guaranteeing thread synchronization.
+        """
+
+        self._videoFileName = ""
+        """
+        Path and name of the video currently opened.
+        """
+
+        self._video = None
+        """
+        OpenCV's VideoCapturer used to read the video frames.
+        """
+
+        self._fps = 0
+        """
+        Frame rate of the video being displayed.
+        """
+
+        self._totalFrames = 0
+        """
+        Total number of frames in the video being displayed.
+        """
+
+        self._currentFrame = -1
+        """
+        Number of the current frame being read/presented.
+        """
+
+        self._mediaStatus = MediaStatus.Closed
+        """
+        Stores the current status of the media (opened or not).
+        """
+
+        self._playbackStatus = PlaybackStatus.Stopped
+        """
+        Store the current status of the playback (stopped, playing or paused).
+        """
+
+        self._teminationFlag = False
+        """
+        Flag used to indicate the thread to terminate running. Used to allow
+        terminating the application elegantly.
+        """
+
+        self.start()
+
+    #---------------------------------------------
+    def terminate(self):
+        """
+        Indicate the thread to terminate elegantly.
+        """
+        lock = QWriteLocker(self._lock)
+        self._teminationFlag = True
+
+    #---------------------------------------------
+    def isTerminated(self):
+        """
+        Checks if the thread has been requested to terminate.
+
+        Returns
+        -------
+        ret: bool
+            Indication if the thread has been requested to terminate or not.
+        """
+        lock = QReadLocker(self._lock)
+        return self._teminationFlag
+
+    #---------------------------------------------
+    def fps(self):
+        """
+        Gets the Frame Rate of the video currently opened.
+
+        Returns
+        -------
+        fps: int
+            Value of the Frame Rate (in frames per second) of the video opened
+            or -1 if no video is opened.
+        """
+        lock = QReadLocker(self._lock)
+        return self._fps
+
+    #---------------------------------------------
+    def totalFrames(self):
+        """
+        Gets the total number of frames in the video currently opened.
+
+        Returns
+        -------
+        total: int
+            Total number of frames in the video opened or 0 if no video is
+            opened.
+        """
+        lock = QReadLocker(self._lock)
+        return self._totalFrames
+
+    #---------------------------------------------
+    def _getFrame(self, position = -1):
+        """
+        Gets the next frame of the video to display.
+        """
+        if self.mediaStatus() != MediaStatus.Opened:
+            return None
+
+        lock = QWriteLocker(self._lock)
+
+        # Seek the video to the given position
+        if position != -1:
+            self._video.set(cv2.CAP_PROP_POS_FRAMES, position)
+            self._currentFrame = self._video.get(cv2.CAP_PROP_POS_FRAMES) - 1
+
+        ret, frame = self._video.read()
+        if not ret:
+            return None
+        else:
+            self._currentFrame += 1
+            return frame
+
+    #---------------------------------------------
+    def mediaStatus(self):
+        """
+        Thread-save read access to the media status.
+
+        Returns
+        -------
+        status: MediaStatus
+            Value of the current media status.
+        """
+        lock = QReadLocker(self._lock)
+        return self._mediaStatus
+
+    #---------------------------------------------
+    def setMediaStatus(self, status):
+        """
+        Thread-save write access to the media status.
+
+        Parameters
+        ----------
+        status: MediaStatus
+            Value to update the media status to.
+        """
+        lock = QWriteLocker(self._lock)
+        self._mediaStatus = status
+
+    #---------------------------------------------
+    def playbackStatus(self):
+        """
+        Thread-save read access to the playback status.
+
+        Returns
+        -------
+        status: PlaybackStatus
+            Value of the current playback status.
+        """
+        lock = QReadLocker(self._lock)
+        return self._playbackStatus
+
+    #---------------------------------------------
+    def setPlaybackStatus(self, status):
+        """
+        Thread-save write access to the playback status.
+
+        Parameters
+        ----------
+        status: PlaybackStatus
+            Value to update the playback status to.
+        """
+        lock = QWriteLocker(self._lock)
+        self._playbackStatus = status
+
+    #---------------------------------------------
+    def open(self, fileName):
+        """
+        Opens the given video for playing.
+
+        Parameter
+        ---------
+        fileName: str
+            Path and name of the video file to open.
+
+        Returns
+        -------
+        ret: bool
+            Indication of success in opening the video file.
+        """
+
+        video = cv2.VideoCapture(fileName)
+        if video is None:
+            return False
+
+        lock = QWriteLocker(self._lock)
+
+        if self._video is not None:
+            self._video.release()
+
+        self._video = video
+        self._videoFileName = fileName
+        self._fps = self._video.get(cv2.CAP_PROP_FPS)
+        self._totalFrames = self._video.get(cv2.CAP_PROP_FRAME_COUNT)
+        self._mediaStatus = MediaStatus.Opened
+        self._playbackStatus = PlaybackStatus.Stopped
+
+        return True
+
+    #---------------------------------------------
+    def close(self):
+        """
+        Closes the currently opened video file.
+        """
+        if self.mediaStatus() == MediaStatus.Opened:
+            lock = QWriteLocker(self._lock)
+            self._playbackStatus = PlaybackStatus.Stopped
+            self._medisStatus = MediaStatus.Closed
+            self._fps = 0
+            self._totalFrames = 0
+            self._currentFrame = -1
+            self._video.release()
+            self._videoFileName = ""
+
+    #---------------------------------------------
+    def play(self):
+        """
+        Plays the currently opened video.
+        """
+        if self.playbackStatus() != PlaybackStatus.Playing:
+            self.setPlaybackStatus(PlaybackStatus.Playing)
+
+    #---------------------------------------------
+    def pause(self):
+        """
+        Pauses the currently opened video.
+        """
+        if self.playbackStatus() not in (PlaybackStatus.Paused,
+                                         PlaybackStatus.Stopped):
+            self.setPlaybackStatus(PlaybackStatus.Paused)
+
+    #---------------------------------------------
+    def stop(self):
+        """
+        Stops the currently opened video.
+        """
+        if self.playbackStatus() != PlaybackStatus.Stopped:
+            self.setPlaybackStatus(PlaybackStatus.Stopped)
+
+    #---------------------------------------------
+    def run(self):
+        """
+        Runs the threaded processing of the video.
+
+        It is important to remember that this is the only method that, in fact,
+        runs in a different thread. All other methods will run in the same
+        thread of the GUI.
+        """
+        while not self.isTerminated():
+
+            start = datetime.now()
+
+            status = self.playbackStatus()
+            if status == PlaybackStatus.Playing:
+                frame = self._getFrame()
+                if frame is None:
+                    print('Video reached the end.')
+                    self.stop()
+                else:
+                    print('frame: {}'.format(self._currentFrame))
+            elif status == PlaybackStatus.Paused:
+                print('Paused')
+            else:
+                print('Stopped')
+
+            end = datetime.now()
+            elapsed = (end - start)
+            fps = self.fps()
+            if fps == 0:
+                fps = 30
+            delay = int(max(1, ((1 / fps) - elapsed.total_seconds()) * 1000))
+            self.msleep(delay)
+
+
+#=============================================
 class VideoWidget(QWidget):
     """
     Implements a video displayer that allows processing frames with OpenCV.
@@ -347,121 +688,7 @@ class VideoWidget(QWidget):
         super().resizeEvent(event)
         self._surface.updateVideoRect()
 
-#=============================================
-class VideoSurface(QAbstractVideoSurface):
-    """
-    Implements a video displayer that allows processing frames with OpenCV.
-    """
 
-    #---------------------------------------------
-    def __init__(self, parent):
-        """
-        Class constructor.
-
-        Parameters
-        ----------
-        parent: QWidget
-            Parent widget, which will also draw the video output produced by
-            this surface.
-        """
-        super().__init__(parent)
-
-        self._widget = parent
-        self._imageFormat = QImage.Format_Invalid
-        self._targetRect = None
-        self._imageSize = None
-        self._sourceRect = None
-        self._currentFrame = None
-
-    #---------------------------------------------
-    def supportedPixelFormats(self, handleType = QAbstractVideoBuffer.NoHandle):
-        if handleType == QAbstractVideoBuffer.NoHandle:
-            return [QVideoFrame.Format_RGB32,
-                    QVideoFrame.Format_ARGB32,
-                    QVideoFrame.Format_ARGB32_Premultiplied,
-                    QVideoFrame.Format_RGB565,
-                    QVideoFrame.Format_RGB555]
-        else:
-            return []
-
-    #---------------------------------------------
-    def isFormatSupported(self, format, similar):
-        imageFormat = QVideoFrame.imageFormatFromPixelFormat(format.pixelFormat())
-        size = format.frameSize()
-
-        return imageFormat != QImage.Format_Invalid and \
-             not size.isEmpty() and \
-             format.handleType() == QAbstractVideoBuffer.NoHandle
-
-    #---------------------------------------------
-    def videoRect(self):
-        return self._targetRect
-
-    #---------------------------------------------
-    def start(self, format):
-        imageFormat = QVideoFrame.imageFormatFromPixelFormat(format.pixelFormat())
-        size = format.frameSize()
-
-        if imageFormat != QImage.Format_Invalid and not size.isEmpty():
-            self._imageFormat = imageFormat
-            self._imageSize = size
-            self._sourceRect = format.viewport()
-
-            super().start(format)
-
-            self._widget.updateGeometry()
-            self.updateVideoRect()
-
-            return True
-        else:
-            return False
-
-    #---------------------------------------------
-    def stop(self):
-        self._currentFrame = QVideoFrame()
-        self._targetRect = QRect()
-        super().stop()
-        self._widget.update()
-
-    #---------------------------------------------
-    def present(self, frame):
-        if self.surfaceFormat().pixelFormat() != frame.pixelFormat() or \
-           self.surfaceFormat().frameSize() != frame.size():
-            setError(IncorrectFormatError)
-            stop()
-            return False
-        else:
-            self._currentFrame = frame
-            self._widget.repaint(self._targetRect)
-            return True
-
-    #---------------------------------------------
-    def updateVideoRect(self):
-        size = self.surfaceFormat().sizeHint()
-        size.scale(self._widget.size().boundedTo(size), Qt.KeepAspectRatio)
-
-        self._targetRect = QRect(QPoint(0, 0), size)
-        self._targetRect.moveCenter(self._widget.rect().center())
-
-    #---------------------------------------------
-    def paint(self, painter):
-        if self._currentFrame.map(QAbstractVideoBuffer.ReadOnly):
-            oldTransform = painter.transform()
-
-            if self.surfaceFormat().scanLineDirection() == QVideoSurfaceFormat.BottomToTop:
-                painter.scale(1, -1)
-                painter.translate(0, -self._widget.height())
-
-            image = QImage(self._currentFrame.bits(),
-                           self._currentFrame.width(),
-                           self._currentFrame.height(),
-                           self._currentFrame.bytesPerLine(),
-                           self._imageFormat);
-
-            painter.drawImage(self._targetRect, image, self._sourceRect)
-            painter.setTransform(oldTransform);
-
-            self._currentFrame.unmap()
 
 #---------------------------------------------
 def main():
