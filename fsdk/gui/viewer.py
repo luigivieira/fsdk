@@ -674,7 +674,12 @@ class VideoWidget(QWidget):
         painter.fillRect(event.rect(), Qt.black)
 
         if self._frame is not None:
-            painter.drawImage(0, 0, self._frame)
+            size = self.size()
+            image = self._frame.scaled(size,
+                        Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            x = self.width() // 2 - image.width() // 2
+            y = self.height() // 2 - image.height() // 2
+            painter.drawImage(x, y, image)
 
     #---------------------------------------------
     def resizeEvent(self, event):
