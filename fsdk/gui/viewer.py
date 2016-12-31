@@ -83,9 +83,8 @@ class MainWindow(QMainWindow):
         self._player = VideoPlayer(self)
 
         # Create the Video Widget
-        self._video = VideoWidget(self)
+        self._video = VideoWidget(self._player, self)
         self.setCentralWidget(self._video)
-        self._player.playback.connect(self._video.playback)
 
         ##############################################
         # Load the window settings
@@ -340,6 +339,21 @@ class VideoPlayer(QThread):
         Image of the frame being displayed.
     """
 
+    opened = pyqtSignal(int)
+    """
+    Signal that indicates that a video has been opened.
+
+    Parameters
+    ----------
+    totalFrames: int
+        Total number of frames in the video.
+    """
+
+    closed = pyqtSignal()
+    """
+    Signal that indicates that the video has been closed.
+    """
+
     #---------------------------------------------
     def __init__(self, parent):
         """
@@ -451,15 +465,9 @@ class VideoPlayer(QThread):
         return self._totalFrames
 
     #---------------------------------------------
-    def _getFrame(self, position = -1):
+    def _getFrame(self):
         """
         Gets the next frame of the video to display.
-
-        Parameters
-        ----------
-        position: int
-            Position (i.e. number of the frame) where to seek the video before
-            reading.
 
         Returns
         -------
@@ -473,11 +481,6 @@ class VideoPlayer(QThread):
             return -1, None
 
         lock = QWriteLocker(self._lock)
-
-        # Seek the video to the given position
-        if position != -1:
-            self._video.set(cv2.CAP_PROP_POS_FRAMES, position)
-            self._currentFrame = self._video.get(cv2.CAP_PROP_POS_FRAMES) - 1
 
         ret, frame = self._video.read()
         if not ret:
@@ -566,9 +569,11 @@ class VideoPlayer(QThread):
         self._video = video
         self._videoFileName = fileName
         self._fps = self._video.get(cv2.CAP_PROP_FPS)
+        self._currentFrame = -1
         self._totalFrames = self._video.get(cv2.CAP_PROP_FRAME_COUNT)
         self._mediaStatus = MediaStatus.Opened
         self._playbackStatus = PlaybackStatus.Stopped
+        self.opened.emit(self._totalFrames)
 
         return True
 
@@ -586,6 +591,7 @@ class VideoPlayer(QThread):
             self._currentFrame = -1
             self._video.release()
             self._videoFileName = ""
+            self.closed.emit()
 
     #---------------------------------------------
     def play(self):
@@ -611,6 +617,27 @@ class VideoPlayer(QThread):
         """
         if self.playbackStatus() != PlaybackStatus.Stopped:
             self.setPlaybackStatus(PlaybackStatus.Stopped)
+
+    #---------------------------------------------
+    def seek(self, position):
+        """
+        Seeks the video, going to the given frame position.
+
+        Parameters
+        ----------
+        position: int
+            Position (i.e. number of the frame) where to seek the video.
+        """
+
+        print('seeking to {}'.format(position))
+
+        if self.mediaStatus() != MediaStatus.Opened:
+            return
+
+        lock = QWriteLocker(self._lock)
+
+        self._video.set(cv2.CAP_PROP_POS_FRAMES, position)
+        self._currentFrame = self._video.get(cv2.CAP_PROP_POS_FRAMES) - 1
 
     #---------------------------------------------
     def run(self):
@@ -645,7 +672,115 @@ class VideoPlayer(QThread):
 #=============================================
 class VideoWidget(QWidget):
     """
-    Implements a video displayer for the frames read with the VideoPlayer class.
+    Implements the video controller that presents the contents of a video read
+    with the VideoPlayer class.
+    """
+
+    #---------------------------------------------
+    def __init__(self, player, parent = None):
+        """
+        Class constructor.
+
+        Parameters
+        ----------
+        player: VideoPlayer
+            Instance of the video player used to read the the video.
+        parent: QWidget
+            Parent widget. The default is None.
+        """
+        super().__init__(parent)
+
+        self._player = player
+        """
+        Instance of the video player used to read the the video.
+        """
+
+        self._frame = VideoFrameWidget(self)
+        """
+        Widget to display the video frames.
+        """
+
+        self._slider = VideoSliderWidget(self)
+        """
+        Slider widget used to display and control the video progress.
+        """
+
+        # Perform the signal connections
+        self._player.opened.connect(self.opened)
+        self._player.closed.connect(self.closed)
+        self._player.playback.connect(self.playback)
+        self._slider.positionChanged.connect(self._positionChanged)
+
+        self.setLayout(QVBoxLayout())
+        self.layout().setContentsMargins(0, 0, 0, 0)
+        self.layout().addWidget(self._frame)
+        self.layout().addWidget(self._slider)
+
+        self.setMinimumSize(self.sizeHint())
+        self._slider.setEnabled(False)
+
+    #---------------------------------------------
+    def sizeHint(self):
+        """
+        Gets the preferred size for this widget.
+
+        Returns
+        -------
+        size: QSize
+            Preferred size of the widget.
+        """
+        return QSize(256, 144)
+
+    #---------------------------------------------
+    def opened(self, totalFrames):
+        """
+        Captures the opened signal from the VideoPlayer class.
+        """
+        self._slider.setMax(totalFrames)
+        self._slider.setPosition(0)
+        self._slider.setEnabled(True)
+
+    #---------------------------------------------
+    def closed(self):
+        """
+        Captures the closed signal from the VideoPlayer class.
+        """
+        self._frame.setFrame(None)
+        self._slider.setPosition(0)
+        self._slider.setEnabled(False)
+
+    #---------------------------------------------
+    def playback(self, position, frame):
+        """
+        Captures the playback signal from the VideoPlayer class.
+
+        Parameters
+        ----------
+        position: int
+            Number of the frame in the video to display.
+        frame: numpy.ndarray
+            Image of the frame to display.
+        """
+        self._frame.setFrame(frame)
+        self._slider.setPosition(position)
+
+    #---------------------------------------------
+    def _positionChanged(self, position):
+        """
+        Captures the position changed signal emitted by the slider in order
+        to position the video playing.
+
+        Parameters
+        ----------
+        position: int
+            Position (frame number) where to seek the video to.
+        """
+        self._player.seek(position)
+
+#=============================================
+class VideoFrameWidget(QWidget):
+    """
+    Implements the displayer of video frames used by the VideoWidget class.
     """
 
     #---------------------------------------------
@@ -660,38 +795,275 @@ class VideoWidget(QWidget):
         """
         super().__init__(parent)
 
-        self._frame = None
+        self._image = None
         """
-        Frame currently displayed.
+        QImage currently displayed.
         """
 
         self.setAutoFillBackground(False)
         self.setAttribute(Qt.WA_NoSystemBackground, True)
 
     #---------------------------------------------
+    def setFrame(self, frame):
+        """
+        Sets the image of the video frame to display.
+
+        Parameters
+        ----------
+        frame: numpy.ndarray
+            OpenCV's image of the video frame to be displayed.
+        """
+        height, width, byteValue = frame.shape
+        byteValue *= width
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        self._image = QImage(frame, width, height, byteValue,
+                                                    QImage.Format_RGB888)
+        self.repaint()
+
+    #---------------------------------------------
     def paintEvent(self, event):
+        """
+        Captures the paint event in order to draw the video frame.
+        """
         painter = QPainter(self)
         painter.fillRect(event.rect(), Qt.black)
 
-        if self._frame is not None:
+        if self._image is not None:
             size = self.size()
-            image = self._frame.scaled(size,
-                        Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            image = self._image.scaled(size, Qt.KeepAspectRatio,
+                                             Qt.SmoothTransformation)
             x = self.width() // 2 - image.width() // 2
             y = self.height() // 2 - image.height() // 2
             painter.drawImage(x, y, image)
 
-    #---------------------------------------------
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
+#=============================================
+class CustomSlider(QSlider):
+    """
+    A custom slider with a nice style sheet and with jump clicking implemented.
+    """
 
     #---------------------------------------------
-    def playback(self, position, frame):
-        height, width, byteValue = frame.shape
-        byteValue *= width
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        self._frame = QImage(frame, width, height, byteValue, QImage.Format_RGB888)
-        self.repaint()
+    def __init__(self, parent = None):
+        """
+        Class constructor.
+
+        Parameters
+        ----------
+        parent: QWidget
+            Parent widget. The default is None.
+        """
+        super(CustomSlider, self).__init__(Qt.Horizontal, parent)
+
+        self.setRange(0, 100)
+        self.setPageStep(10)
+
+        self.setStyleSheet(
+            'QSlider::groove:horizontal'
+            '{'
+            '    border: 1px solid #bbb;'
+            '    background: white;'
+            '    height: 10px;'
+            '    border-radius: 4px;'
+            '}'
+            ''
+            'QSlider::sub-page:horizontal'
+            '{'
+            '    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, '
+            '                                stop: 0 #669999, stop: 1 #d1e0e0);'
+            '    background: qlineargradient(x1: 0, y1: 0.2, x2: 1, y2: 1, '
+            '                                stop: 0 #d1e0e0, stop: 1 #85adad);'
+            '    border: 1px solid #777;'
+            '    height: 10px;'
+            '    border-radius: 4px;'
+            '}'
+            ''
+            'QSlider::add-page:horizontal'
+            '{'
+            '    background: #fff;'
+            '    border: 1px solid #777;'
+            '    height: 10px;'
+            '    border-radius: 4px;'
+            '}'
+            ''
+            'QSlider::handle:horizontal'
+            '{'
+            '    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, '
+            '                                stop:0 #eee, stop:1 #ccc);'
+            '    border: 1px solid #777;'
+            '    width: 30px;'
+            '    margin-top: -2px;'
+            '    margin-bottom: -2px;'
+            '    border-radius: 5px;'
+            '}'
+            ''
+            'QSlider::handle:horizontal:hover'
+            '{'
+            '    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,'
+            '        stop:0 #fff, stop:1 #ddd);'
+            '    border: 1px solid #444;'
+            '    border-radius: 5px;'
+            '}'
+            ''
+            'QSlider::sub-page:horizontal:disabled'
+            '{'
+            '    background: #bbb;'
+            '    border-color: #999;'
+            '}'
+            ''
+            'QSlider::add-page:horizontal:disabled'
+            '{'
+            '    background: #eee;'
+            '    border-color: #999;'
+            '}'
+            ''
+            'QSlider::handle:horizontal:disabled'
+            '{'
+            '    background: #eee;'
+            '    border: 1px solid #aaa;'
+            '    border-radius: 4px;'
+            '}'
+        )
+
+    #---------------------------------------------
+    def mousePressEvent(self, event):
+        """
+        Captures the mouse press event to implement the jump click (i.e. allows
+        the handle to jump to the position clicked by the user instead of
+        emulating a page-up or page-down - the default behavior).
+
+        Parameters
+        ----------
+        event: QMousePressEvent
+            Object with the event received.
+        """
+        opt = QStyleOptionSlider()
+        self.initStyleOption(opt)
+
+        handleRect = self.style().subControlRect(QStyle.CC_Slider, opt,
+                                                 QStyle.SC_SliderHandle, self)
+
+        if event.button() == Qt.LeftButton and \
+           not handleRect.contains(event.pos()):
+            halfHandleWidth = (0.5 * handleRect.width()) + 0.5
+            adaptedPosX = event.x()
+            if adaptedPosX < halfHandleWidth:
+                adaptedPosX = halfHandleWidth
+            if adaptedPosX > self.width() - halfHandleWidth:
+                adaptedPosX = self.width() - halfHandleWidth
+
+            newWidth = (self.width() - halfHandleWidth) - halfHandleWidth
+            normalizedPosition = (adaptedPosX - halfHandleWidth) / newWidth
+
+            newVal = round(self.minimum() + \
+                        (self.maximum() - self.minimum()) * normalizedPosition)
+            if self.invertedAppearance():
+                self.setValue(self.maximum() - newVal)
+            else:
+                self.setValue(newVal)
+
+            event.accept()
+            self.actionTriggered.emit(QSlider.SliderMove)
+
+        super().mousePressEvent(event)
+
+#=============================================
+class VideoSliderWidget(QWidget):
+    """
+    Implements a custom slider to display and control the video progress.
+    """
+
+    positionChanged = pyqtSignal(int)
+    """
+    Position changed signal, emitted when a the video position is changed by
+    the user.
+
+    Parameters
+    ----------
+    position: int
+        Number of the frame to position the video.
+    """
+
+    #---------------------------------------------
+    def __init__(self, parent = None):
+        """
+        Class constructor.
+
+        Parameters
+        ----------
+        parent: QWidget
+            Parent widget. The default is None.
+        """
+        super().__init__(parent)
+
+        self._slider = CustomSlider(self)
+        """
+        Slider used to display and control the video progress.
+        """
+
+        self._elapsed = QLabel(self)
+        """
+        Label used to display the elapsed time of the video.
+        """
+
+        self._remaining = QLabel(self)
+        """
+        Label used to display the remaining time of the video.
+        """
+
+        self._slider.valueChanged.connect(self.valueChanged)
+        self._elapsed.setText('00:00:00')
+        self._remaining.setText('00:00:00')
+
+        self.setLayout(QHBoxLayout())
+        self.layout().setContentsMargins(5, 0, 5, 5)
+
+        self.layout().addWidget(self._elapsed)
+        self.layout().addWidget(self._slider)
+        self.layout().addWidget(self._remaining)
+
+        self.setFixedHeight(20)
+
+    #---------------------------------------------
+    def valueChanged(self, position):
+        """
+        Captures the value changed signal from the slider and emit it as
+        the position changed signal only if it is done by the user action
+        in the slider.
+        """
+        if self._slider.isSliderDown():
+            self.positionChanged.emit(position)
+
+    #---------------------------------------------
+    def setMax(self, value):
+        """
+        Sets the maximum value for the slider range.
+
+        Parameters
+        ----------
+        value: int
+            Maximum value for the slider range.
+        """
+        self._slider.setRange(0, value)
+
+    #---------------------------------------------
+    def setPosition(self, position):
+        """
+        Sets the slider position.
+
+        Parameters
+        ----------
+        position: int
+            Position of the slider.
+        """
+        self._slider.setValue(position)
+
+        elapsedSeconds = position / 30
+        remainingSeconds = (self._slider.maximum() - position) / 30
+        elapsed = QTime(0, 0, 0).addSecs(elapsedSeconds)
+        remaining = QTime(0, 0, 0).addSecs(remainingSeconds)
+
+        self._elapsed.setText('{} ({})'.format(elapsed.toString("HH:mm:ss"), position))
+        self._remaining.setText(remaining.toString("HH:mm:ss"))
 
 #---------------------------------------------
 def main():
