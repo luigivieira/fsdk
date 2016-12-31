@@ -147,14 +147,8 @@ class MainWindow(QMainWindow):
             if not ret:
                 return False
 
-        ext = os.path.splitext(fileName)[1].lower()
-        if ext == '.yaml':
-            pass
-        else:
-            if self._player.open(fileName):
-                self._player.play()
-            else:
-                print('Oops!')
+        if self._player.open(fileName):
+            self._player.play()
 
         return True
 
@@ -638,10 +632,6 @@ class VideoPlayer(QThread):
                     self.stop()
                 else:
                     self.playback.emit(pos, frame)
-            elif status == PlaybackStatus.Paused:
-                print('Paused')
-            else:
-                print('Stopped')
 
             end = datetime.now()
             elapsed = (end - start)
@@ -684,9 +674,7 @@ class VideoWidget(QWidget):
         painter.fillRect(event.rect(), Qt.black)
 
         if self._frame is not None:
-            painter.begin(self)
             painter.drawImage(0, 0, self._frame)
-            painter.end()
 
     #---------------------------------------------
     def resizeEvent(self, event):
