@@ -30,6 +30,7 @@ import sys
 import cv2
 from enum import Enum
 from datetime import datetime
+import numpy as np
 
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
@@ -82,8 +83,9 @@ class MainWindow(QMainWindow):
         self._player = VideoPlayer(self)
 
         # Create the Video Widget
-        #self._video = VideoWidget(self)
-        #self.setCentralWidget(self._video)
+        self._video = VideoWidget(self)
+        self.setCentralWidget(self._video)
+        self._player.playback.connect(self._video.playback)
 
         ##############################################
         # Load the window settings
@@ -332,6 +334,18 @@ class VideoPlayer(QThread):
     Implements a video player based on VideoCapturer from OpenCV.
     """
 
+    playback = pyqtSignal(int, np.ndarray)
+    """
+    Playback signal, emitted when a video is being played.
+
+    Parameters
+    ----------
+    position: int
+        Number of the frame being displayed.
+    frame: numpy.ndarray
+        Image of the frame being displayed.
+    """
+
     #---------------------------------------------
     def __init__(self, parent):
         """
@@ -446,9 +460,23 @@ class VideoPlayer(QThread):
     def _getFrame(self, position = -1):
         """
         Gets the next frame of the video to display.
+
+        Parameters
+        ----------
+        position: int
+            Position (i.e. number of the frame) where to seek the video before
+            reading.
+
+        Returns
+        -------
+        position: int
+            Number of the frame read, or -1 if failed.
+        frame: numpy.ndarray
+            Image of the frame read, or None if failed.
+
         """
         if self.mediaStatus() != MediaStatus.Opened:
-            return None
+            return -1, None
 
         lock = QWriteLocker(self._lock)
 
@@ -459,10 +487,10 @@ class VideoPlayer(QThread):
 
         ret, frame = self._video.read()
         if not ret:
-            return None
+            return -1, None
         else:
             self._currentFrame += 1
-            return frame
+            return self._currentFrame, frame
 
     #---------------------------------------------
     def mediaStatus(self):
@@ -605,12 +633,11 @@ class VideoPlayer(QThread):
 
             status = self.playbackStatus()
             if status == PlaybackStatus.Playing:
-                frame = self._getFrame()
+                pos, frame = self._getFrame()
                 if frame is None:
-                    print('Video reached the end.')
                     self.stop()
                 else:
-                    print('frame: {}'.format(self._currentFrame))
+                    self.playback.emit(pos, frame)
             elif status == PlaybackStatus.Paused:
                 print('Paused')
             else:
@@ -628,7 +655,7 @@ class VideoPlayer(QThread):
 #=============================================
 class VideoWidget(QWidget):
     """
-    Implements a video displayer that allows processing frames with OpenCV.
+    Implements a video displayer for the frames read with the VideoPlayer class.
     """
 
     #---------------------------------------------
@@ -643,52 +670,35 @@ class VideoWidget(QWidget):
         """
         super().__init__(parent)
 
+        self._frame = None
+        """
+        Frame currently displayed.
+        """
+
         self.setAutoFillBackground(False)
         self.setAttribute(Qt.WA_NoSystemBackground, True)
-
-        palette = self.palette()
-        palette.setColor(QPalette.Background, Qt.black)
-        self.setPalette(palette)
-
-        self._surface = VideoSurface(self)
-
-    #---------------------------------------------
-    def sizeHint(self):
-        """
-        Hints the desired size for this widget.
-
-        Returns
-        -------
-        hint: QSize
-            Size that the widget should consider when being resized.
-        """
-        return self._surface.surfaceFormat().sizeHint()
 
     #---------------------------------------------
     def paintEvent(self, event):
         painter = QPainter(self)
+        painter.fillRect(event.rect(), Qt.black)
 
-        if self._surface.isActive():
-            videoRect = self._surface.videoRect()
-
-            if not videoRect.contains(event.rect()):
-                region = event.region()
-
-                brush = self.palette().window()
-
-                for rect in region.rects():
-                    painter.fillRect(rect, brush)
-
-            self._surface.paint(painter)
-        else:
-            painter.fillRect(event.rect(), self.palette().window())
+        if self._frame is not None:
+            painter.begin(self)
+            painter.drawImage(0, 0, self._frame)
+            painter.end()
 
     #---------------------------------------------
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self._surface.updateVideoRect()
 
-
+    #---------------------------------------------
+    def playback(self, position, frame):
+        height, width, byteValue = frame.shape
+        byteValue *= width
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        self._frame = QImage(frame, width, height, byteValue, QImage.Format_RGB888)
+        self.repaint()
 
 #---------------------------------------------
 def main():
