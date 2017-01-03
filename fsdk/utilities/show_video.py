@@ -111,9 +111,9 @@ def main(argv):
                 croppedFrame, croppedFace = face.crop(frame)
 
                 # Detect emotions
-                responses = bank.filter(croppedFrame)
-                emotions = emotionsDetector.detect(croppedFace, responses)
-                drawEmotionInfo(emotions, frame)
+                #responses = bank.filter(croppedFrame)
+                #emotions = emotionsDetector.detect(croppedFace, responses)
+                #drawEmotionInfo(emotions, frame)
 
                 # Detect blinks
                 blinkingDetector.detect(frameNum, croppedFace)
