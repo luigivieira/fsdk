@@ -55,7 +55,8 @@ class FaceDetector:
     """
     Field of View in degrees of the camera used to capture the facial images.
     This value is used to estimate the distance that the face is located from
-    the camera.
+    the camera, and was obtained from the camera specifications (it was used a
+    Webcam HD 720P C270 Logitech).
     """
 
     _cameraResolution = [1280, 720]
@@ -64,12 +65,10 @@ class FaceDetector:
     is used to estimate the distance that the face is located from the camera.
     """
 
-    _avgFaceLength = 12
+    _avgNasalHeight = 5.5
     """
-    Average Face Length (menton-sellion) in centimeters. This is the vertical
-    distance from the tip of the chin (menton) to the deepest point of the nasal
-    root depression between the eyes (sellion). This value is used to estimate
-    the distance that the face is located from the camera.
+    Average Nasal Height of male and female humans in ages 20 to 40. Source is:
+    https://www.facebase.org/facial_norms/summary/#nasalheight
     """
 
     #---------------------------------------------
@@ -174,20 +173,20 @@ class FaceDetector:
                        min(y + h + margin, image.shape[0] - 1)
                       )
 
-        # Get the face length in pixels
+        # Get the nasal height in pixels
         p1 = face.landmarks[FaceData._noseBridge[0]] # Top of nose bridge
-        p2 = face.landmarks[FaceData._chinLine[3]]   # Bottom of chin line
-        faceLength = np.linalg.norm(p2 - p1)
+        p2 = face.landmarks[FaceData._lowerNose[3]]  # Bottom of lower nose
+        nasalHeight = np.linalg.norm(p2 - p1) // 10 * 10
 
         # Calculate the focal length of the camera, based the angle of its
-        # Field of View (FOV) and the width of the images captured
+        # Field of View (FOV) and the height of the images captured
         radFOV = FaceDetector._cameraFOV * math.pi / 180 # Convert to radians
-        width = FaceDetector._cameraResolution[0]
-        focalLength = (width * 0.5) / math.tan(radFOV * 0.5)
+        height = FaceDetector._cameraResolution[1]
+        focalLength = (height * 0.5) / math.tan(radFOV * 0.5)
 
         # Estimate the distance of the face from the camera (in centimeters)
-        # using: the camera focal length (in pixels), the average human facial
-        # length (in centimeters) and the detected face length (in pixels)
-        face.distance = FaceDetector._avgFaceLength * focalLength / faceLength
+        # using: the camera focal length (in pixels), the average human nasal
+        # length (in centimeters) and the detected nasal height (in pixels)
+        face.distance = FaceDetector._avgNasalHeight * focalLength / nasalHeight
 
         return True, face
