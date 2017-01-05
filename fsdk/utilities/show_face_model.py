@@ -35,7 +35,7 @@ if __name__ == '__main__':
     import sys
     sys.path.append('../../')
 
-from fsdk.detectors.faces import Face
+from fsdk.detectors.faces import FaceDetector
 
 #---------------------------------------------
 def main(argv):
@@ -69,8 +69,8 @@ def main(argv):
     scale = 4
     faceImage = cv2.resize(faceImage, (0, 0), fx=scale, fy=scale)
 
-    face = Face()
-    face.detect(faceImage)
+    det = FaceDetector()
+    _, face = det.detect(faceImage)
 
     model = np.ones(faceImage.shape, faceImage.dtype) * 255
     face.draw(model, False)

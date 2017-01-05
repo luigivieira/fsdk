@@ -36,6 +36,7 @@ if __name__ == '__main__':
     sys.path.append('../../')
 
 from fsdk.features.data import FaceData
+from fsdk.detectors.faces import FaceDetector
 
 #---------------------------------------------
 def main(argv):
@@ -61,15 +62,15 @@ def main(argv):
 
             fileName = os.path.join(dirpath, f)
             print('Processing file {}...'.format(fileName))
-            if not updateGradients(fileName):
-                print('Failed to update gradients in file {}'.format(fileName))
+            if not updateDistances(fileName):
+                print('Failed to update distances in file {}'.format(fileName))
 
     print('done.')
 
 #---------------------------------------------
-def updateGradients(fileName):
+def updateDistances(fileName):
     """
-    Calculate and update the distance gradients on the given CSV file.
+    Calculate and update the distance on the given CSV file.
 
     Parameters
     ----------
@@ -93,7 +94,10 @@ def updateGradients(fileName):
     writer = csv.writer(file, delimiter=',', quotechar='"',
                               quoting=csv.QUOTE_MINIMAL)
 
-    # Read the data and build a list of distances
+    det = FaceDetector()
+
+    # Read the face data from the CSV file and recalculate the distances,
+    # also building a list to later recalculate the distance gradients
     frames = []
     distances = []
     faces = OrderedDict()
@@ -103,17 +107,18 @@ def updateGradients(fileName):
             frameNum = int(row[0])
             face = FaceData()
             face.fromList(row[1:])
-            face.gradient = 0.0 # Just in case there is already a value there
+            face.gradient = 0.0
+            det.calculateDistance(face)
             faces[frameNum] = face
 
-            # Consider for the calculation only the non-empty faces (i.e. the
-            # frames where a face was detected)
+            # Consider for the calculation of the gradients only the non-empty
+            # faces (i.e. the frames where a face was detected)
             if not face.isEmpty():
                 frames.append(frameNum)
                 distances.append(face.distance)
 
-    # Calculate the gradient from the list of distances
-    gradients = np.gradient(distances)
+    # Calculate the gradients from the helper list of distances
+    gradients = np.gradient(distances) #, 61) # Consider a window of 2 seconds
     for i, frameNum in enumerate(frames):
         faces[frameNum].gradient = gradients[i]
 
@@ -148,13 +153,14 @@ def parseCommandLine(argv):
         documentation of the argparse package for details)
 
     """
-    parser = argparse.ArgumentParser(description='Calculate the gradients of '
-                                     'the face distance in the features data '
-                                     'files.')
+    parser = argparse.ArgumentParser(description='(Re)calculate the distances '
+                                     'of the faces to the camera and their '
+                                     'gradients, updating the existing face '
+                                     'annotation CSV files.')
 
     parser.add_argument('annotationPath',
                         help='Path to where to find the CSV files created with '
-                        'the extracted features.')
+                        'the extracted face features.')
 
     return parser.parse_args()
 

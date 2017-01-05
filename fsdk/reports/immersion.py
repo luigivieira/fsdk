@@ -32,6 +32,7 @@ import argparse
 import numpy as np
 from matplotlib import pyplot as plt
 import seaborn as sns
+from sklearn import preprocessing
 
 #---------------------------------------------
 def main(argv):
@@ -138,7 +139,7 @@ def main(argv):
 
     mng = plt.get_current_fig_manager()
     mng.window.state('zoomed')
-    plt.title('Immersion')
+    plt.suptitle('Gradient of the face distance (2 seconds window, thresholded above 0.5 cm)', fontsize=30)
     plt.show()
 
 #---------------------------------------------
@@ -176,19 +177,21 @@ def plotFaceData(axis, frames, gradients, involvement):
     fps = 30 # videos were recorded with a frame rate of 30 frames per second
     time = [(f / 60 / fps) for f in frames]
 
-    minV = np.min(gradients)
-    maxV = np.max(gradients)
-    gradients /= maxV
+    #gradients = [i if abs(i) >= 0.05 else 0.0 for i in gradients]
 
-    gradients = [i if abs(i) > 0.5 else 0.0 for i in gradients]
+    scaler = preprocessing.StandardScaler().fit(gradients)
+    gradients = scaler.transform(gradients)
+
+    d = gradients.std()
+    gradients = [i if abs(i) >= (5 * d) else 0.0 for i in gradients]
 
     start = 0 # 5 * 60 * fps # Start the plots at 5 minutes
 
     axis.set_xlim([0, 10])
-    axis.set_ylim([-1, 1])
+    #axis.set_ylim([-1, 1])
     #axis.set_yticks([0, 0.5, 1])
     axis.plot(time[start:], gradients[start:], 'b', lw=1.5)
-    axis.plot(time[start:], involvement[start:], 'r', lw=1.5)
+    #axis.plot(time[start:], involvement[start:], 'r', lw=1.5)
     #for start, end in areas:
     #    plt.axvspan(start / 30 / 60, end / 30 / 60, color='red', alpha=0.5)
     #plt.axvspan(9750, frames[-1], color='blue', alpha=0.2)

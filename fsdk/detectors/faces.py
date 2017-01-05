@@ -173,6 +173,26 @@ class FaceDetector:
                        min(y + h + margin, image.shape[0] - 1)
                       )
 
+        # Estimate the distance of the face from the camera
+        self.calculateDistance(face)
+
+        return True, face
+
+    #---------------------------------------------
+    def calculateDistance(self, face):
+        """
+        Estimate the distance of the face from the camera.
+
+        Parameters
+        ----------
+        face: FaceData
+            Object with the face landmarks, which will be updated with the
+            estimated distance.
+        """
+        face.distance = 0.0
+        if face.isEmpty():
+            return
+
         # Get the nasal height in pixels
         p1 = face.landmarks[FaceData._noseBridge[0]] # Top of nose bridge
         p2 = face.landmarks[FaceData._lowerNose[3]]  # Bottom of lower nose
@@ -188,5 +208,3 @@ class FaceDetector:
         # using: the camera focal length (in pixels), the average human nasal
         # length (in centimeters) and the detected nasal height (in pixels)
         face.distance = FaceDetector._avgNasalHeight * focalLength / nasalHeight
-
-        return True, face
