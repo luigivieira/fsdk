@@ -26,21 +26,15 @@
 # SOFTWARE.
 
 import sys
-import math
-from datetime import datetime
 import argparse
 import cv2
+import glob
 import numpy as np
+from datetime import datetime, timedelta
 
 if __name__ == '__main__':
     import sys
     sys.path.append('../../')
-
-from fsdk.filters.gabor import GaborBank
-from fsdk.features.data import FaceData
-from fsdk.detectors.faces import FaceDetector
-from fsdk.detectors.blinking import BlinkingDetector
-from fsdk.detectors.emotions import EmotionsDetector
 
 #---------------------------------------------
 def main(argv):
@@ -56,30 +50,27 @@ def main(argv):
     # Parse the command line
     args = parseCommandLine(argv)
 
-    # Load the video or the webcam
-    if args.video is not None:
-        video = cv2.VideoCapture(args.video)
-        if not video.isOpened():
-            print('Error opening video file {}'.format(args.video))
-            sys.exit(-1)
-        fps = video.get(cv2.CAP_PROP_FPS)
-        total = video.get(cv2.CAP_PROP_FRAME_COUNT)
+    parts = os.path.split(args.annotationPath)
+    videoPath = parts[0]
+    videoName = parts[1]
+
+    if os.path.isabs(args.annotationPath):
+        annotationPath = '{}/{}'.format(videoPath, args.annotationPath)
     else:
-        video = cv2.VideoCapture(args.camera)
-        if not video.isOpened():
-            print('Error initializing the camera device {}'.format(args.camera))
-            sys.exit(-2)
-        fps = 30
+        annotationPath = args.annotationPath
+    annotationPath = os.path.normpath(annotationPath)
 
-    # Bank of Gabor kernels used for feature extraction
-    bank = GaborBank()
+    faceFilename = '{}/{}-face.csv'.format(annotationPath, videoName)
 
-    # Detectors of blinking and prototypic emotions
-    blinkingDetector = BlinkingDetector(fps)
-    emotionsDetector = EmotionsDetector()
 
-    # Features of the eyes
-    eyeFeatures = FaceData._leftEye + FaceData._rightEye
+    # Load the video
+    video = cv2.VideoCapture(args.video)
+    if not video.isOpened():
+        print('Error opening video file {}'.format(args.video))
+        sys.exit(-1)
+
+    fps = int(video.get(cv2.CAP_PROP_FPS))
+    frameCount = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
 
     # Text settings
     fontFace = cv2.FONT_HERSHEY_SIMPLEX
@@ -88,144 +79,192 @@ def main(argv):
     color = (255, 255, 255)
 
     paused = False
-    blinks = 0
-    frameNum = -1
+    frameNum = 0
 
     # Process the video input
     while True:
 
-        start = datetime.now()
-
         if not paused:
-            ret, frame = video.read()
-            if not ret:
-                break
-            frameNum +=1
+            start = datetime.now()
 
-            faceDetector = FaceDetector()
-            ret, face = faceDetector.detect(frame, 4)
+        ret, img = video.read()
+        if ret:
+            frame = img
+        else:
+            paused = True
 
-            if ret:
+        drawInfo(frame, frameNum, frameCount, paused, fps)
 
-                # Crop only the face region
-                croppedFrame, croppedFace = face.crop(frame)
+        cv2.imshow(args.video, frame)
 
-                # Detect emotions
-                #responses = bank.filter(croppedFrame)
-                #emotions = emotionsDetector.detect(croppedFace, responses)
-                #drawEmotionInfo(emotions, frame)
+        if paused:
+            key = cv2.waitKey(0)
+        else:
+            end = datetime.now()
+            delta = (end - start)
+            delay = int(max(1, ((1 / fps) - delta.total_seconds()) * 1000))
 
-                # Detect blinks
-                blinkingDetector.detect(frameNum, croppedFace)
+            key = cv2.waitKey(delay)
 
-                numBlinks = len(blinkingDetector.blinks)
-                bpm = blinkingDetector.bpm
-                drawBlinkInfo(numBlinks, bpm, frame)
-
-                print('Distance (in centimeters): {:.2f}'.format(face.distance))
-
-                frame = face.draw(frame)
-            else:
-                text = 'No Face Detected!'
-                textSize, _ = cv2.getTextSize(text, fontFace, fontScale, thickness)
-                cv2.putText(frame, text,
-                             (frame.shape[1] // 2 - textSize[0] // 2, textSize[1]),
-                             fontFace, fontScale, (0, 0, 255), thickness)
-
-            text = 'Press \'q\' to quit'
-            textSize, _ = cv2.getTextSize(text, fontFace, fontScale, thickness)
-            cv2.putText(frame, text,
-                        (frame.shape[1] // 2 - textSize[0] // 2,
-                         frame.shape[0]-textSize[1]),
-                        fontFace, fontScale, color, thickness)
-
-            cv2.imshow('Video', frame)
-
-        end = datetime.now()
-        delta = (end - start)
-        delay = int(max(1, ((1 / fps) - delta.total_seconds()) * 1000))
-
-        key = cv2.waitKey(delay)
-        if key & 0xFF == ord('q'):
+        if key == ord('q') or key == ord('Q') or key == 27:
             break
-        elif key & 0xFF == ord('p'):
+        elif key == ord('p') or key == ord('P'):
             paused = not paused
+        elif key == ord('r') or key == ord('R'):
+            frameNum = 0
+            video.set(cv2.CAP_PROP_POS_FRAMES, frameNum)
+        elif paused and key == 2424832: # Left key
+            frameNum -= 1
+            if frameNum < 0:
+                frameNum = 0
+            video.set(cv2.CAP_PROP_POS_FRAMES, frameNum)
+        elif paused and key == 2555904: # Right key
+            frameNum += 1
+            if frameNum >= frameCount:
+                frameNum = frameCount - 1
+        elif key == 2162688: # Pageup key
+            frameNum -= (fps * 60)
+            if frameNum < 0:
+                frameNum = 0
+            video.set(cv2.CAP_PROP_POS_FRAMES, frameNum)
+        elif key == 2228224: # Pagedown key
+            frameNum += (fps * 60)
+            if frameNum >= frameCount:
+                frameNum = frameCount - 1
+            video.set(cv2.CAP_PROP_POS_FRAMES, frameNum)
+        elif key == 7340032: # F1
+            showHelp(args.video, frame.shape)
+        elif not paused:
+            frameNum += 1
 
     video.release()
     cv2.destroyAllWindows()
 
 #---------------------------------------------
-def drawEmotionInfo(emotions, image):
+def drawInfo(frame, frameNum, frameCount, paused, fps):
     """
-    Draws emotional information on the given image.
+    Draws text info related to the given frame number into the frame image.
 
     Parameters
     ----------
-    emotions: dict
-        Dictionary with the probabilities of each prototypic emotion.
-    image: numpy.array
+    image: numpy.ndarray
         Image data where to draw the text info.
+    frameNum: int
+        Number of the frame of which to drawn the text info.
+    frameCount: int
+        Number total of frames in the video.
+    paused: bool
+        Indication if the video is paused or not.
+    fps: int
+        Frame rate (in frames per second) of the video for time calculation.
     """
 
-    fontFace = cv2.FONT_HERSHEY_SIMPLEX
-    fontScale = 0.5
-    thickness = 1
+    # Font settings
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    scale = 0.5
+    thick = 1
+
+    # Color settings
     black = (0, 0, 0)
     white = (255, 255, 255)
+    yellow = (0, 255, 255)
     red = (0, 0, 255)
 
-    i = 1
-    em = max(emotions, key=lambda i: emotions[i])
-    for emotion, probability in emotions.items():
+    # Print the current frame number and timestamp
+    text = 'Frame: {:d}/{:d} {}'.format(frameNum, frameCount - 1,
+                                        '(paused)' if paused else '')
+    size, _ = cv2.getTextSize(text, font, scale, thick)
+    x = 5
+    y = 5 + size[1]
+    cv2.putText(frame, text, (x, y), font, scale, black, thick * 3)
+    cv2.putText(frame, text, (x, y), font, scale, white, thick)
 
-        if em == emotion:
-            color = red
-        else:
-            color = black
+    timestamp = datetime.min + timedelta(seconds=(frameNum / fps))
+    elapsedTime = datetime.strftime(timestamp, '%H:%M:%S')
+    timestamp = datetime.min + timedelta(seconds=(frameCount / fps))
+    totalTime = datetime.strftime(timestamp, '%H:%M:%S')
 
-        text = '{}:'.format(emotion)
-        textSize, _ = cv2.getTextSize(text, fontFace, fontScale, thickness)
+    text = 'Time: {}/{}'.format(elapsedTime, totalTime)
+    size, _ = cv2.getTextSize(text, font, scale, thick)
+    y += 10 + size[1]
+    cv2.putText(frame, text, (x, y), font, scale, black, thick * 3)
+    cv2.putText(frame, text, (x, y), font, scale, white, thick)
 
-        x = 10
-        y = i * textSize[1] * 2
-        i += 1
 
-        cv2.putText(image, text, (x,y), fontFace, fontScale, color, thickness*3)
-        cv2.putText(image, text, (x,y), fontFace, fontScale, white, thickness)
 
-        x = 120
-        text = '{:.2f}'.format(probability)
-        cv2.putText(image, text, (x,y), fontFace, fontScale, color, thickness*3)
-        cv2.putText(image, text, (x,y), fontFace, fontScale, white, thickness)
+    # Print the help message
+    text = 'F1 for help'
+    size, _ = cv2.getTextSize(text, font, scale, thick)
+    x = frame.shape[1] // 2 - size[0] // 2
+    y = frame.shape[0] - size[1]
+    cv2.putText(frame, text, (x, y), font, scale, black, thick * 3)
+    cv2.putText(frame, text, (x, y), font, scale, yellow, thick)
 
 #---------------------------------------------
-def drawBlinkInfo(blinks, bpm, image):
+def showHelp(windowTitle, shape):
     """
-    Draws blinking information on the given image.
+    Displays an image with helping text.
 
     Parameters
     ----------
-    blinks: int
-        Number of blinks detected.
-    bpm: float
-        Blinking rate (in blinks per minute).
-    image: numpy.array
-        Image data where to draw the text info.
+    windowTitle: str
+        Title of the window where to display the help
+    shape: tuple
+        Height and width of the window to create the help image.
     """
 
-    fontFace = cv2.FONT_HERSHEY_SIMPLEX
-    fontScale = 0.5
-    thickness = 1
-    white = (255, 255, 255)
+    # Font settings
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    scale = 1.0
+    thick = 1
+
+    # Color settings
     black = (0, 0, 0)
+    yellow = (0, 255, 255)
+    lightBlue = (120, 120, 0)
 
-    text = 'Total blinks: {:d} (blinks per minute: {:d})'.format(blinks, bpm)
-    textSize, _ = cv2.getTextSize(text, fontFace, fontScale, thickness)
+    # Create the background image
+    image = np.ones((shape[0], shape[1], 3)) * lightBlue
 
-    x = image.shape[1] // 2 - textSize[0] // 2
-    y = textSize[1]
-    cv2.putText(image, text, (x,y), fontFace, fontScale, black, thickness*3)
-    cv2.putText(image, text, (x, y), fontFace, fontScale, white, thickness)
+    # The help text is printed in one line per item in this list
+    helpText = [
+                'Controls:',
+                '-----------------------------------------------',
+                '[q] or [ESC]: quits from the application.',
+                '[p]: toggles paused/playing the video.',
+                '[r]: restarts the video playback.',
+                '[left/right arrow]: displays the previous/next frame (only when paused).',
+                '[page-up/down]: rewinds/fast forwards the video by 1 minute.',
+                ' ',
+                ' ',
+                'Press any key to close this window...'
+               ]
+
+    # Print the controls help text
+    xCenter = image.shape[1] // 2
+    yCenter = image.shape[0] // 2
+
+    margin = 20 # between-lines margin in pixels
+    textWidth = 0
+    textHeight = margin * (len(helpText) - 1)
+    lineHeight = 0
+    for line in helpText:
+        size, _ = cv2.getTextSize(line, font, scale, thick)
+        textHeight += size[1]
+        textWidth = size[0] if size[0] > textWidth else textWidth
+        lineHeight = size[1] if size[1] > lineHeight else lineHeight
+
+    x = xCenter - textWidth // 2
+    y = yCenter - textHeight // 2
+
+    for line in helpText:
+        cv2.putText(image, line, (x, y), font, scale, black, thick * 3)
+        cv2.putText(image, line, (x, y), font, scale, yellow, thick)
+        y += margin + lineHeight
+
+    # Show the image and wait for a key press
+    cv2.imshow(windowTitle, image)
+    cv2.waitKey(0)
 
 #---------------------------------------------
 def parseCommandLine(argv):
@@ -249,19 +288,27 @@ def parseCommandLine(argv):
 
     """
     parser = argparse.ArgumentParser(description='Shows videos with facial data'
-                                        ' produced by the FSDK project.')
+                                        ' produced by the FSDK project frame by'
+                                        ' frame.')
 
-    parser.add_argument('video', nargs='?',
+    parser.add_argument('video',
                         help='Video file with faces to display. The supported '
                         'formats depend on the codecs installed in the '
                         'operating system.')
 
-    parser.add_argument('-c', '--camera',
+    parser.add_argument('annotationPath', nargs='?',
+                        default='../annotation/',
+                        help='Path where to find the annotation files with the '
+                        'FSDK data related to the video. The default is '
+                        '\'..\\annotation\' (relative to the path of the video '
+                        'opened).'
+                       )
+
+    parser.add_argument('-s', '--start',
                         type=int,
                         default=0,
-                        help='Id of the camera device to use when a video file '
-                        'is not provided. The default is 0 (i.e. the main '
-                        'camera).'
+                        help='Number of the frame from where to start the '
+                        'video playback. The default is 0.'
                        )
 
     return parser.parse_args()
