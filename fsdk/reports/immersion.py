@@ -179,11 +179,11 @@ def plotFaceData(axis, frames, gradients, involvement):
 
     #gradients = [i if abs(i) >= 0.05 else 0.0 for i in gradients]
 
-    scaler = preprocessing.StandardScaler().fit(gradients)
-    gradients = scaler.transform(gradients)
+    #scaler = preprocessing.StandardScaler().fit(gradients)
+    #gradients = scaler.transform(gradients)
 
-    d = gradients.std()
-    gradients = [i if abs(i) >= (5 * d) else 0.0 for i in gradients]
+    #d = gradients.std()
+    #gradients = [i if abs(i) >= (5 * d) else 0.0 for i in gradients]
 
     start = 0 # 5 * 60 * fps # Start the plots at 5 minutes
 

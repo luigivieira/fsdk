@@ -51,24 +51,58 @@ class FaceDetector:
     landmarks in images, shared by all instances of this class.
     """
 
-    _cameraFOV = 60
+    _poseModel = np.array([
+                            (0.0, 0.0, 0.0),            # Nose tip
+                            (0.0, -330.0, -65.0),       # Chin bottom
+                            (-225.0, 170.0, -135.0),    # Left eye left corner
+                            (225.0, 170.0, -135.0),     # Right eye right corner
+                            (-150.0, -150.0, -125.0),   # Left mouth corner
+                            (150.0, -150.0, -125.0)     # Right mouth corner
+                         ])
     """
-    Field of View in degrees of the camera used to capture the facial images.
-    This value is used to estimate the distance that the face is located from
-    the camera, and was obtained from the camera specifications (it was used a
-    Webcam HD 720P C270 Logitech).
+    Arbitrary facial model for pose estimation considering only 6 facial
+    landmarks (nose tip, chin bottom, left eye left corner, right eye right
+    corner, left mouth corner and right mouth corner).
     """
 
     _cameraResolution = [1280, 720]
     """
-    Resolution in which the camera used captures the facial images. This value
+    Resolution in which the camera used captured the facial images. This value
     is used to estimate the distance that the face is located from the camera.
     """
 
-    _avgNasalHeight = 5.5
+    _focalLength = _cameraResolution[0]
     """
-    Average Nasal Height of male and female humans in ages 20 to 40. Source is:
-    https://www.facebase.org/facial_norms/summary/#nasalheight
+    Focal length of the camera. Estimated from the width of the images captured
+    from the camera.
+    """
+
+    _opticalCenter = (_cameraResolution[0] / 2,
+                      _cameraResolution[1] / 2)
+    """
+    Optical center of the camera. Estimated from the size of the images captured
+    from the camera.
+    """
+
+    _cameraMatrix = np.array([
+                                [_focalLength, 0, _opticalCenter[0]],
+                                [0, _focalLength, _opticalCenter[1]],
+                                [0, 0, 1]
+                             ], dtype = 'float')
+    """
+    Matrix of the camera fixed parameters. These values would have to be
+    estimated by performing a calibration of the camera. But since we are only
+    interested in the rate of change of the distance (distance gradients)
+    instead of an accurate distance measurement, we simply estimated these
+    values from the resolution of the images obtained.
+    """
+
+    _distCoeffs = np.zeros((4, 1))
+    """
+    Vector of distortion coefficients of the camera. Since we are interested in
+    the rate of change of the distance (distance gradients) instead of an
+    accurate distance measurement, for simplicity it is assumed that the camera
+    has no distortion.
     """
 
     #---------------------------------------------
@@ -181,7 +215,7 @@ class FaceDetector:
     #---------------------------------------------
     def calculateDistance(self, face):
         """
-        Estimate the distance of the face from the camera.
+        Estimate the distance of the face from the camera using pose estimation.
 
         Parameters
         ----------
@@ -189,22 +223,28 @@ class FaceDetector:
             Object with the face landmarks, which will be updated with the
             estimated distance.
         """
-        face.distance = 0.0
+        face.distance = 0
         if face.isEmpty():
             return
 
-        # Get the nasal height in pixels
-        p1 = face.landmarks[FaceData._noseBridge[0]] # Top of nose bridge
-        p2 = face.landmarks[FaceData._lowerNose[3]]  # Bottom of lower nose
-        nasalHeight = np.linalg.norm(p2 - p1) // 10 * 10
+        # Get the 2D positions of the pose model points detected in the image
+        p = face.landmarks
+        points = np.array([
+                            tuple(p[30]),     # Nose tip
+                            tuple(p[8]),      # Chin
+                            tuple(p[36]),     # Left eye left corner
+                            tuple(p[45]),     # Right eye right corne
+                            tuple(p[48]),     # Left Mouth corner
+                            tuple(p[54])      # Right mouth corner
+                          ], dtype = 'float')
 
-        # Calculate the focal length of the camera, based the angle of its
-        # Field of View (FOV) and the height of the images captured
-        radFOV = FaceDetector._cameraFOV * math.pi / 180 # Convert to radians
-        height = FaceDetector._cameraResolution[1]
-        focalLength = (height * 0.5) / math.tan(radFOV * 0.5)
+        # Estimate the pose of the face in the 3D world
+        ret, rot, trans = cv2.solvePnP(FaceDetector._poseModel,
+                                       points, FaceDetector._cameraMatrix,
+                                       FaceDetector._distCoeffs,
+                                       flags=cv2.SOLVEPNP_ITERATIVE)
 
-        # Estimate the distance of the face from the camera (in centimeters)
-        # using: the camera focal length (in pixels), the average human nasal
-        # length (in centimeters) and the detected nasal height (in pixels)
-        face.distance = FaceDetector._avgNasalHeight * focalLength / nasalHeight
+        # The estimated distance is the value on the Z axis. The value is
+        # divided by 50 to approximate the real value (due to the arbitrary
+        # choice of the model).
+        face.distance = int(trans[2][0] // 50)
