@@ -193,25 +193,69 @@ class VideoData:
         yellow = (0, 255, 255)
         red = (0, 0, 255)
 
-        # Plot the face landmarks
-        try:
-            face = self._faces[frameNum]
-            face.draw(frame)
-        except:
-            pass
+        empty = True
 
-        # Plot the blink count and rate
+        # Plot the face landmarks and face distance
         x = 5
         y = 0
         w = int(frame.shape[1]* 0.2)
         try:
+            face = self._faces[frameNum]
+            empty = face.isEmpty()
+            face.draw(frame)
+
+            if not empty:
+
+                # Draw the header
+                text = 'face'
+                size, _ = cv2.getTextSize(text, font, scale, thick)
+                y += size[1] + 10
+
+                cv2.putText(frame, text, (x, y), font, scale, black, glow)
+                cv2.putText(frame, text, (x, y), font, scale, white, thick)
+
+                y += 5
+                cv2.line(frame, (x,y), (x+w,y), white, 1)
+
+                # Draw the estimated distance
+                text = 'distance:'
+                size, _ = cv2.getTextSize(text, font, scale, thick)
+                t = size[0] + 10
+                y += size[1] + 10
+
+                cv2.putText(frame, text, (x+20, y), font, scale, black, glow)
+                cv2.putText(frame, text, (x+20, y), font, scale, white, thick)
+
+                text = '{:.2f}'.format(face.distance)
+                cv2.putText(frame, text, (x+20+t, y), font, scale, black, glow)
+                cv2.putText(frame, text, (x+20+t, y), font, scale, white, thick)
+
+                # Draw the blink rate
+                text = 'gradient:'
+                size, _ = cv2.getTextSize(text, font, scale, thick)
+                y += size[1] + 10
+
+                cv2.putText(frame, text, (x+20, y), font, scale, black, glow)
+                cv2.putText(frame, text, (x+20, y), font, scale, white, thick)
+
+                text = '{:.2f}'.format(face.gradient)
+                cv2.putText(frame, text, (x+20+t, y), font, scale, black, glow)
+                cv2.putText(frame, text, (x+20+t, y), font, scale, white, thick)
+
+                size, _ = cv2.getTextSize(text, font, scale, thick)
+                #y += size[1] + 10
+        except:
+            pass
+
+        # Plot the blink count and rate
+        try:
             blink = self._blinks[frameNum]
-            if not blink.isEmpty():
+            if not empty:
 
                 # Draw the header
                 text = 'blinks'
                 size, _ = cv2.getTextSize(text, font, scale, thick)
-                y += size[1] + 10
+                y += size[1] + 20
 
                 cv2.putText(frame, text, (x, y), font, scale, black, glow)
                 cv2.putText(frame, text, (x, y), font, scale, white, thick)
@@ -255,7 +299,7 @@ class VideoData:
         # Plot the emotion probabilities
         try:
             emotions = self._emotions[frameNum]
-            if emotions.isEmpty():
+            if empty:
                 labels = []
                 values = []
             else:

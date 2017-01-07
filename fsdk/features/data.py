@@ -120,7 +120,7 @@ class FaceData:
 
     def __init__(self, region = (0, 0, 0, 0),
                  landmarks = [0 for i in range(136)],
-                 distance = 0, gradient = 0.0):
+                 distance = 0.0, gradient = 0.0):
         """
         Class constructor.
 
@@ -349,7 +349,7 @@ class FaceData:
         self.region = (int(values[0]), int(values[1]),
                        int(values[2]), int(values[3]))
         self.landmarks = list(np.array(values[4:140], dtype=int).reshape(68, 2))
-        self.distance = int(float(values[140]))
+        self.distance = float(values[140])
         self.gradient = float(values[141])
 
 #=============================================

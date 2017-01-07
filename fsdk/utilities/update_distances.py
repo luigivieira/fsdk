@@ -101,6 +101,7 @@ def updateDistances(fileName):
     frames = []
     distances = []
     faces = OrderedDict()
+    prevDist = 0
     for row in reader:
         if row[0] != 'frame':
             # Read the face data from the CSV file
@@ -110,6 +111,13 @@ def updateDistances(fileName):
             face.gradient = 0.0
             det.calculateDistance(face)
             faces[frameNum] = face
+
+            # In case the face has been detected but the distance calculation
+            # failed, assume the same distance as the previous detected face
+            if not face.isEmpty():
+                if face.distance == 0:
+                    face.distance = prevDist
+                prevDist = face.distance
 
             # Consider for the calculation of the gradients only the non-empty
             # faces (i.e. the frames where a face was detected)
