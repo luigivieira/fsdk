@@ -37,7 +37,6 @@ if __name__ == '__main__':
     sys.path.append('../../')
 
 from fsdk.features.extraction import FeatureExtractor, BaseTaskObserver
-from fsdk.features.data import VideoData, FrameData
 
 #=============================================
 class TaskObserver(BaseTaskObserver):

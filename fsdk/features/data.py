@@ -118,9 +118,9 @@ class FaceData:
     instances to a CSV file.
     """
 
-    def __init__(self, region = (0.0, 0.0, 0.0, 0.0),
+    def __init__(self, region = (0, 0, 0, 0),
                  landmarks = [0 for i in range(136)],
-                 distance = 0.0, gradient = 0.0):
+                 distance = 0, gradient = 0.0):
         """
         Class constructor.
 
@@ -480,10 +480,44 @@ class EmotionData:
             the neutral face. The default is a dictionary with all probabilities
             equal to 0.0.
         """
-        self.emotions = emotions
+        self.neutral = emotions['neutral']
         """
-        Dictionary with the probabilities of each prototypical emotion plus the
-        neutral face.
+        Probabilities of a neutral face.
+        """
+
+        self.anger = emotions['anger']
+        """
+        Probabilities of an anger face.
+        """
+
+        self.contempt = emotions['contempt']
+        """
+        Probabilities of a contempt face.
+        """
+
+        self.disgust = emotions['disgust']
+        """
+        Probabilities of a disgust face.
+        """
+
+        self.fear = emotions['fear']
+        """
+        Probabilities of a fear face.
+        """
+
+        self.happiness = emotions['happiness']
+        """
+        Probabilities of a happiness face.
+        """
+
+        self.sadness = emotions['sadness']
+        """
+        Probabilities of a sadness face.
+        """
+
+        self.surprise = emotions['surprise']
+        """
+        Probabilities of a surprise face.
         """
 
     #---------------------------------------------
@@ -500,7 +534,16 @@ class EmotionData:
         ret: EmotionData
             New instance of the EmotionData class deep copied from this object.
         """
-        return EmotionData(self.emotions.copy())
+        ret = EmotionData()
+        ret.neutral = self.neutral
+        ret.anger = self.anger
+        ret.contempt = self.contempt
+        ret.disgust = self.disgust
+        ret.fear = self.fear
+        ret.happiness = self.happines
+        ret.sadness = self.sadness
+        ret.surprise = self.surprise
+        return ret
 
     #---------------------------------------------
     def isEmpty(self):
@@ -512,7 +555,9 @@ class EmotionData:
         response: bool
             Indication on whether this object is empty.
         """
-        return all(v == 0 for _, v in self.emotions.items())
+        return all(v == 0.0 for v in [self.neutral, self.anger, self.contempt,
+                                      self.disgust, self.fear, self.happiness,
+                                      self.sadness, self.surprise])
 
     #---------------------------------------------
     def toList(self):
@@ -525,7 +570,9 @@ class EmotionData:
         ret: list
             A list with all values of the this EmotionData.
         """
-        ret = [p for _, p in self.emotions.items()]
+        ret = [self.neutral, self.anger, self.contempt,
+               self.disgust, self.fear, self.happiness,
+               self.sadness, self.surprise]
         return ret
 
     #---------------------------------------------
@@ -552,8 +599,14 @@ class EmotionData:
         if len(values) != len(EmotionData.header()):
             raise RuntimeError
 
-        for i, emotion, prob in zip(range(7), self.emotions.items()):
-            self.emotions[emotion] = float(values[i])
+        self.neutral = float(values[0])
+        self.anger = float(values[1])
+        self.contempt = float(values[2])
+        self.disgust = float(values[3])
+        self.fear = float(values[4])
+        self.happiness = float(values[5])
+        self.sadness = float(values[6])
+        self.surprise = float(values[7])
 
 #=============================================
 class BlinkData:
@@ -666,8 +719,7 @@ class FrameData:
     for the assessment of fun.
     """
 
-    header = lambda: ['frame'] + \
-                     FaceData.header() + GaborData.header() + \
+    header = lambda: ['frame'] + FaceData.header() + \
                      EmotionData.header() + BlinkData.header()
     """
     Helper static function to create the header for storing frames of data.
@@ -694,11 +746,6 @@ class FrameData:
         Face detected in this frame.
         """
 
-        self.gabor = GaborData()
-        """
-        Gabor responses extracted from the face detected in this frame.
-        """
-
         self.emotions = EmotionData()
         """
         Probabilities of the prototypical emotions detected in this frame.
@@ -721,8 +768,7 @@ class FrameData:
         ret: list
             A list with all values of the frame data.
         """
-        ret = [self.frameNum] + \
-              self.face.toList() + self.gabor.toList() + \
+        ret = [self.frameNum] + self.face.toList() + \
               self.emotions.toList() + self.blinks.toList()
         return ret
 
@@ -757,214 +803,9 @@ class FrameData:
         self.face.fromList(values[start:end])
 
         start = end
-        end = start + len(GaborData.header())
-        self.gabor.fromList(values[start:end])
-
-        start = end
         end = start + len(EmotionData.header())
         self.emotions.fromList(values[start:end])
 
         start = end
         end = start + len(BlinkData.header())
         self.blinks.fromList(values[start:end])
-
-#=============================================
-class VideoDataIterator:
-    """
-    Iterator implementation to allow iterating through the frames of a VideoData
-    instance.
-    """
-
-    #---------------------------------------------
-    def __init__(self, videoData):
-        """
-        Class constructor.
-
-        Parameters
-        ----------
-        videoData: VideoData
-            Instance of the VideoData from where to iterate the frames.
-        """
-        self._it = iter(videoData._frames.items())
-
-    #---------------------------------------------
-    def __iter__(self):
-        """
-        Getter of the iterator instance.
-
-        Returns
-        -------
-        it: VideoDataIterator
-            This instance of iterator (since it is also an iterable).
-        """
-        return self
-
-    #---------------------------------------------
-    def __next__(self):
-        """
-        Access the next frame in the iteration.
-
-        Returns
-        -------
-        frame: FrameData
-            Instance of the next FrameData in the iteration. When the iteration
-            reaches the end (and there is no more frames to return), the
-            exception StopIteration is raised.
-        """
-        _, frame = next(self._it)
-        return frame
-
-#=============================================
-class VideoData:
-    """
-    Represents the data of features extracted from video files and used for the
-    assessment of fun.
-    """
-
-    #---------------------------------------------
-    def __init__(self):
-        """
-        Class constructor.
-        """
-
-        self._frames = OrderedDict()
-        """
-        Features data of each frame collected from the video. Only the frames
-        in which a face was detected are included.
-        """
-
-    #---------------------------------------------
-    def __len__(self):
-        """
-        Helper method that allows querying the number of frames with data in
-        this object by using `len(obj)`.
-
-        Returns
-        -------
-        len: int
-            Number of frames of data.
-        """
-        return len(self._frames)
-
-    #---------------------------------------------
-    def __getitem__(self, frameNum):
-        """
-        Helper method that allows getting the data of a frame through its frame
-        number by using `v = obj[num]`.
-
-        Parameters
-        ----------
-        frameNum: int
-            Number of the frame to get.
-
-        Returns
-        -------
-        frameData: FrameData or None
-            Data of the given frame or None if the frame does not exist.
-        """
-        return self._frames[frameNum]
-
-    #---------------------------------------------
-    def __setitem__(self, frameNum, frameData):
-        """
-        Helper method that allows setting the data of a frame through its frame
-        number by using `obj[num] = v`.
-
-        Parameters
-        ----------
-        frameNum: int
-            Number of the frame to set.
-        frameData: FrameData
-            Instance of the FrameData object to add/update.
-
-        Returns
-        -------
-        frameData: FrameData
-            Data of the frame updated.
-        """
-        self._frames[frameNum] = frameData
-        return frameData
-
-    #---------------------------------------------
-    def __delitem__(self, frameNum):
-        """
-        Helper method that allows deleting the data of a frame through its frame
-        number by using `del obj[num]`.
-
-        Parameters
-        ----------
-        frameNum: int
-            Number of the frame to delete.
-        """
-        del self._frames[frameNum]
-
-    #---------------------------------------------
-    def __iter__(self):
-        """
-        Getter of the iterator instance.
-
-        Returns
-        -------
-        it: VideoDataIterator
-            New instance of an iterator to allow iterating through the frames
-            in this class.
-        """
-        return VideoDataIterator(self)
-
-    #---------------------------------------------
-    def read(self, fileName):
-        try:
-            file = open(fileName, 'r', newline='')
-        except IOError as e:
-            return False
-
-        self._frames = OrderedDict()
-
-        reader = csv.reader(file, delimiter=',', quotechar='"',
-                            quoting=csv.QUOTE_MINIMAL)
-        first = True
-        for row in reader:
-
-            # Ignore the header
-            if first:
-                first = False
-                continue
-
-            frame = FrameData(0)
-            frame.fromList(row)
-            self._frames[frame.frameNum] = frame
-
-        file.close()
-
-    #---------------------------------------------
-    def save(self, fileName):
-        """
-        Saves the contents of this instance object to the given file in the CSV
-        (Comma-Separated Values) format.
-
-        Parameters
-        ----------
-        fileName: str
-            Path and name of the file where to save the data.
-
-        Returns
-        -------
-        ret: bool
-            Indication on the success or failure of the saving.
-        """
-
-        # Open the file for writing
-        try:
-            file = open(fileName, 'w', newline='')
-        except IOError as e:
-            return False
-
-        writer = csv.writer(file, delimiter=',', quotechar='"',
-                            quoting=csv.QUOTE_MINIMAL)
-
-        writer.writerow(FrameData.header())
-        for _, frame in self._frames.items():
-            writer.writerow(frame.toList())
-
-        file.close()
-        return True

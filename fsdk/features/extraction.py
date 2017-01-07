@@ -37,7 +37,6 @@ from fsdk.detectors.faces import FaceDetector
 from fsdk.detectors.blinking import BlinkingDetector
 from fsdk.detectors.emotions import EmotionsDetector
 from fsdk.features.data import FaceData, GaborData, EmotionData, BlinkData
-from fsdk.features.data import FrameData, VideoData
 
 #=============================================
 class ExtractionErrors(Enum):
