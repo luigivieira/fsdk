@@ -118,7 +118,7 @@ def updateDistances(fileName):
                 distances.append(face.distance)
 
     # Calculate the gradients from the helper list of distances
-    gradients = np.gradient(distances) #, 61) # Consider a window of 2 seconds
+    gradients = np.gradient(distances)
     for i, frameNum in enumerate(frames):
         faces[frameNum].gradient = gradients[i]
 

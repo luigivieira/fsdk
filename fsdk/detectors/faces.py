@@ -244,7 +244,17 @@ class FaceDetector:
                                        FaceDetector._distCoeffs,
                                        flags=cv2.SOLVEPNP_ITERATIVE)
 
-        # The estimated distance is the value on the Z axis. The value is
-        # divided by 50 to approximate the real value (due to the arbitrary
-        # choice of the model).
-        face.distance = int(trans[2][0] // 50)
+        # The estimated distance is the absolute value on the Z axis. That value
+        # is divided by 50 to approximate the real value (due to the arbitrary
+        # choice of the model being scaled by ~ 50x).
+        d = int(abs(trans[2][0] // 50))
+
+        # Error verification. I don't know exactly why, but for *only* two
+        # frames of *one* of the test videos the value returned by solvePnP is
+        # crazy! Perhaps this would be fixed with proper calibration (?). But at
+        # this time, it is simply easier to assume 0.0 in that very rare
+        # scenario.
+        if d > 100:
+            face.distance = 0.0
+        else:
+            face.distance = d
