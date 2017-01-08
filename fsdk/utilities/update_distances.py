@@ -36,7 +36,6 @@ if __name__ == '__main__':
     sys.path.append('../../')
 
 from fsdk.features.data import FaceData
-from fsdk.detectors.faces import FaceDetector
 
 #---------------------------------------------
 def main(argv):
@@ -94,8 +93,6 @@ def updateDistances(fileName):
     writer = csv.writer(file, delimiter=',', quotechar='"',
                               quoting=csv.QUOTE_MINIMAL)
 
-    det = FaceDetector()
-
     # Read the face data from the CSV file and recalculate the distances,
     # also building a list to later recalculate the distance gradients
     frames = []
@@ -109,7 +106,7 @@ def updateDistances(fileName):
             face = FaceData()
             face.fromList(row[1:])
             face.gradient = 0.0
-            det.calculateDistance(face)
+            face.calculateDistance()
             faces[frameNum] = face
 
             # In case the face has been detected but the distance calculation

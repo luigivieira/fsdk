@@ -51,60 +51,6 @@ class FaceDetector:
     landmarks in images, shared by all instances of this class.
     """
 
-    _poseModel = np.array([
-                            (0.0, 0.0, 0.0),            # Nose tip
-                            (0.0, -330.0, -65.0),       # Chin bottom
-                            (-225.0, 170.0, -135.0),    # Left eye left corner
-                            (225.0, 170.0, -135.0),     # Right eye right corner
-                            (-150.0, -150.0, -125.0),   # Left mouth corner
-                            (150.0, -150.0, -125.0)     # Right mouth corner
-                         ])
-    """
-    Arbitrary facial model for pose estimation considering only 6 facial
-    landmarks (nose tip, chin bottom, left eye left corner, right eye right
-    corner, left mouth corner and right mouth corner).
-    """
-
-    _cameraResolution = [1280, 720]
-    """
-    Resolution in which the camera used captured the facial images. This value
-    is used to estimate the distance that the face is located from the camera.
-    """
-
-    _focalLength = _cameraResolution[0]
-    """
-    Focal length of the camera. Estimated from the width of the images captured
-    from the camera.
-    """
-
-    _opticalCenter = (_cameraResolution[0] / 2,
-                      _cameraResolution[1] / 2)
-    """
-    Optical center of the camera. Estimated from the size of the images captured
-    from the camera.
-    """
-
-    _cameraMatrix = np.array([
-                                [_focalLength, 0, _opticalCenter[0]],
-                                [0, _focalLength, _opticalCenter[1]],
-                                [0, 0, 1]
-                             ], dtype = 'float')
-    """
-    Matrix of the camera fixed parameters. These values would have to be
-    estimated by performing a calibration of the camera. But since we are only
-    interested in the rate of change of the distance (distance gradients)
-    instead of an accurate distance measurement, we simply estimated these
-    values from the resolution of the images obtained.
-    """
-
-    _distCoeffs = np.zeros((4, 1))
-    """
-    Vector of distortion coefficients of the camera. Since we are interested in
-    the rate of change of the distance (distance gradients) instead of an
-    accurate distance measurement, for simplicity it is assumed that the camera
-    has no distortion.
-    """
-
     #---------------------------------------------
     def detect(self, image, downSampleRatio = None):
         """
@@ -208,58 +154,6 @@ class FaceDetector:
                       )
 
         # Estimate the distance of the face from the camera
-        self.calculateDistance(face)
+        face.calculateDistance()
 
         return True, face
-
-    #---------------------------------------------
-    def calculateDistance(self, face):
-        """
-        Estimate the distance of the face from the camera using pose estimation.
-
-        Parameters
-        ----------
-        face: FaceData
-            Object with the face landmarks, which will be updated with the
-            estimated distance.
-        """
-        face.distance = 0.0
-        if face.isEmpty():
-            return
-
-        # Get the 2D positions of the pose model points detected in the image
-        p = face.landmarks
-        points = np.array([
-                            tuple(p[30]),     # Nose tip
-                            tuple(p[8]),      # Chin
-                            tuple(p[36]),     # Left eye left corner
-                            tuple(p[45]),     # Right eye right corne
-                            tuple(p[48]),     # Left Mouth corner
-                            tuple(p[54])      # Right mouth corner
-                          ], dtype = 'float')
-
-        # Estimate the pose of the face in the 3D world
-        ret, rot, trans = cv2.solvePnP(FaceDetector._poseModel,
-                                       points, FaceDetector._cameraMatrix,
-                                       FaceDetector._distCoeffs,
-                                       flags=cv2.SOLVEPNP_ITERATIVE)
-
-        # The estimated distance is the absolute value on the Z axis. That value
-        # is divided by 50 to approximate the real value (due to the arbitrary
-        # choice of the model being scaled by ~ 50x).
-        d = abs(trans[2][0] // 50)
-
-        # Error verification. I don't know exactly why, but for a few frames in
-        # *one or two* of the test videos the value returned by solvePnP is
-        # totally bizarre (too big or too low). Perhaps this would be fixed with
-        # a proper calibration of the camera. But at this time, it is easier
-        # to not have a distance calculated in those very rare scenarios.
-        # The distance update code that relies on this calculation can then use
-        # the same value from a previous frame or interpolate it.
-        #
-        # The expected range of distance is between 20 and 60 cm, so "extreme"
-        # values (bellow 10 and above 100) are considered errors.
-        if d <= 10 or d >= 100:
-            face.distance = 0.0
-        else:
-            face.distance = d
