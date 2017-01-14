@@ -33,7 +33,7 @@ from collections import OrderedDict
 
 if __name__ == '__main__':
     import sys
-    sys.path.append('../../../../')
+    sys.path.append('../../../')
 
 from fsdk.filters.gabor import GaborBank
 from fsdk.features.data import FaceData

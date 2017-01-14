@@ -59,7 +59,7 @@ class EmotionsDetector:
 
         self._clf = svm.SVC(kernel='rbf', gamma=0.001, C=10,
                                 decision_function_shape='ovr',
-                                probability=True)
+                                probability=True, class_weight='balanced')
         """
         Support Vector Machine with used as the model for the detection of the
         prototypic emotions. The kernel and its parameters were identified by
@@ -207,14 +207,34 @@ class EmotionsDetector:
         # Filter only the responses at the facial landmarks
         features = self._relevantFeatures(gaborResponses, face.landmarks)
 
-        # Predict the emotion probabilities on these features
+        # Return the prediction on the features
+        return self.predict(features)
+
+    #---------------------------------------------
+    def predict(self, features):
+        """
+        Predicts the emotions on the given features vector.
+
+        Parameters
+        ----------
+        features: list
+            List of responses of the kernels at each of the face landmarks.
+
+        Returns
+        -------
+        probabilities: OrderedDict
+            The probabilities of each of the prototypic emotion, in format:
+            {'anger': value, 'contempt': value, [...]}
+        """
+
+        # Predict the emotion probabilities on the given features
         probas = self._clf.predict_proba([features])[0]
 
         # Build a dictionary with the probabilities and emotion labels
         ret = OrderedDict()
-        for cl in range(len(self._emotions)):
-            label = self._emotions[cl]
-            ret[label] = probas[cl]
+        for i in range(len(self._emotions)):
+            label = self._emotions[i]
+            ret[label] = probas[i]
 
         return ret
 
@@ -381,7 +401,7 @@ class EmotionsDetector:
 
         clf = svm.SVC(kernel='rbf', gamma=0.001, C=10,
                           decision_function_shape='ovr',
-                          probability=True) #, class_weight='balanced')
+                          probability=True, class_weight='balanced')
 
         print('Performing KFold cross-validation with k = {}...'.format(args.k))
         scores = cross_val_score(clf, x, y, cv=args.k, n_jobs=-1)
