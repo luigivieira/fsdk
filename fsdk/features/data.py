@@ -557,18 +557,18 @@ class EmotionData:
     Represents the probabilities of the prototypic emotions detected on a frame.
     """
 
-    header = lambda: ['emotion.neutral', 'emotion.anger', 'emotion.contempt',
-                      'emotion.disgust', 'emotion.fear', 'emotion.happiness',
-                      'emotion.sadness', 'emotion.surprise']
+    header = lambda: ['emotion.neutral', 'emotion.happiness', 'emotion.sadness',
+                      'emotion.anger', 'emotion.fear', 'emotion.surprise',
+                      'emotion.disgust']
     """
     Helper static function to create the header useful for saving EmotionData
     instances to a CSV file.
     """
 
     def __init__(self, emotions = OrderedDict([
-                        ('neutral', 0.0), ('anger', 0.0), ('contempt', 0.0),
-                        ('disgust', 0.0), ('fear', 0.0),  ('happiness', 0.0),
-                        ('sadness', 0.0), ('surprise', 0.0)
+                        ('neutral', 0.0), ('happiness', 0.0), ('sadness', 0.0),
+                        ('anger', 0.0), ('fear', 0.0),  ('surprise', 0.0),
+                        ('disgust', 0.0)
                  ])):
         """
         Class constructor.
@@ -585,26 +585,6 @@ class EmotionData:
         Probabilities of a neutral face.
         """
 
-        self.anger = emotions['anger']
-        """
-        Probabilities of an anger face.
-        """
-
-        self.contempt = emotions['contempt']
-        """
-        Probabilities of a contempt face.
-        """
-
-        self.disgust = emotions['disgust']
-        """
-        Probabilities of a disgust face.
-        """
-
-        self.fear = emotions['fear']
-        """
-        Probabilities of a fear face.
-        """
-
         self.happiness = emotions['happiness']
         """
         Probabilities of a happiness face.
@@ -615,9 +595,24 @@ class EmotionData:
         Probabilities of a sadness face.
         """
 
+        self.anger = emotions['anger']
+        """
+        Probabilities of an anger face.
+        """
+
+        self.fear = emotions['fear']
+        """
+        Probabilities of a fear face.
+        """
+
         self.surprise = emotions['surprise']
         """
         Probabilities of a surprise face.
+        """
+
+        self.disgust = emotions['disgust']
+        """
+        Probabilities of a disgust face.
         """
 
     #---------------------------------------------
@@ -636,13 +631,12 @@ class EmotionData:
         """
         ret = EmotionData()
         ret.neutral = self.neutral
-        ret.anger = self.anger
-        ret.contempt = self.contempt
-        ret.disgust = self.disgust
-        ret.fear = self.fear
         ret.happiness = self.happines
         ret.sadness = self.sadness
+        ret.anger = self.anger
+        ret.fear = self.fear
         ret.surprise = self.surprise
+        ret.disgust = self.disgust
         return ret
 
     #---------------------------------------------
@@ -655,9 +649,9 @@ class EmotionData:
         response: bool
             Indication on whether this object is empty.
         """
-        return all(v == 0.0 for v in [self.neutral, self.anger, self.contempt,
-                                      self.disgust, self.fear, self.happiness,
-                                      self.sadness, self.surprise])
+        return all(v == 0.0 for v in [self.neutral, self.happiness,
+                                      self.sadness, self.anger, self.fear,
+                                      self.surprise, self.disgust])
 
     #---------------------------------------------
     def toList(self):
@@ -670,9 +664,8 @@ class EmotionData:
         ret: list
             A list with all values of the this EmotionData.
         """
-        ret = [self.neutral, self.anger, self.contempt,
-               self.disgust, self.fear, self.happiness,
-               self.sadness, self.surprise]
+        ret = [self.neutral, self.happiness, self.sadness,
+               self.anger, self.fear, self.surprise, self.disgust]
         return ret
 
     #---------------------------------------------
@@ -700,13 +693,12 @@ class EmotionData:
             raise RuntimeError
 
         self.neutral = float(values[0])
-        self.anger = float(values[1])
-        self.contempt = float(values[2])
-        self.disgust = float(values[3])
+        self.happiness = float(values[1])
+        self.sadness = float(values[2])
+        self.anger = float(values[3])
         self.fear = float(values[4])
-        self.happiness = float(values[5])
-        self.sadness = float(values[6])
-        self.surprise = float(values[7])
+        self.surprise = float(values[5])
+        self.disgust = float(values[6])
 
 #=============================================
 class BlinkData:

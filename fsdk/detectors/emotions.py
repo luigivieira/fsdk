@@ -33,6 +33,7 @@ from collections import OrderedDict
 import argparse
 import numpy as np
 from sklearn import svm
+from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import cross_val_score
 from sklearn.externals import joblib
 
@@ -56,17 +57,19 @@ class EmotionsDetector:
         Class constructor.
         """
 
-        self._clf = svm.SVC(kernel='linear', decision_function_shape='ovr',
+        self._clf = svm.SVC(kernel='rbf', gamma=0.001, C=10,
+                                decision_function_shape='ovr',
                                 probability=True)
         """
-        Support Vector Machine with linear kernel used as the model for the
-        detection of the prototypic emotions.
+        Support Vector Machine with used as the model for the detection of the
+        prototypic emotions. The kernel and its parameters were identified by
+        running the optimize() method.
         """
 
         self._emotions = OrderedDict([
-                             (0, 'neutral'), (1, 'anger'), (2, 'contempt'),
-                             (3, 'disgust'), (4, 'fear'),  (5, 'happiness'),
-                             (6, 'sadness'), (7, 'surprise')
+                             (0, 'neutral'), (1, 'happiness'), (2, 'sadness'),
+                             (3, 'anger'), (4, 'fear'),  (5, 'surprise'),
+                             (6, 'disgust')
                          ])
         """
         Class and labels of the prototypic emotions detected by this model.
@@ -211,7 +214,7 @@ class EmotionsDetector:
         ret = OrderedDict()
         for cl in range(len(self._emotions)):
             label = self._emotions[cl]
-            ret[label] = probas[cl-1]
+            ret[label] = probas[cl]
 
         return ret
 
@@ -236,9 +239,9 @@ class EmotionsDetector:
         ##################################
         # Check the command line arguments
         ##################################
-        if not os.path.isdir(args.ckplusPath):
-            print('path of the CK+ dataset does not exist: {}' \
-                    .format(args.ckplusPath))
+        if not os.path.isdir(args.samplesPath):
+            print('path of the image samples does not exist: {}' \
+                    .format(args.samplesPath))
             return -1
 
         ##################################
@@ -246,62 +249,12 @@ class EmotionsDetector:
         ##################################
         print('Collecting the sample images...')
 
+        fileName = '{}/labels.csv'.format(args.samplesPath)
         samples = []
-
-        # First, collect all imaged labeled with emotions
-        emotionsPath = '{}/Emotion/'.format(args.ckplusPath)
-        for dirpath, _, filenames in os.walk(emotionsPath):
-            for f in filenames:
-                items = f.split('_')
-                subject = items[0]
-                sequence = items[1]
-                frame = items[2]
-
-                imageFile = '{}/cohn-kanade-images/{}/{}/{}_{}_{}.png' \
-                             .format(args.ckplusPath, subject, sequence,
-                                     subject, sequence, frame)
-
-                if not os.path.isfile(imageFile):
-                    print('Image file could not found: {}'.format(imageFile))
-                    return -2
-
-                file = os.path.join(dirpath, f)
-                try:
-                    fd = open(file)
-                except:
-                    print('Could not open file {} for read'.format(file))
-                    return -3
-
-                label = [int(float(v)) for v in next(fd).split()][0]
-                fd.close()
-
-                samples.append([os.path.abspath(imageFile), label])
-
-        # Now, collect all neutral images (the first one of each subject's
-        # sequence - i.e. the file with frame '00000001')
-        imagesPath = '{}/cohn-kanade-images/'.format(args.ckplusPath)
-        for dirpath, _, filenames in os.walk(imagesPath):
-            for f in filenames:
-                items = f.split('.')[0].split('_')
-
-                if len(items) != 3:
-                    continue
-
-                frame = items[2]
-                if frame != '00000001':
-                    continue
-
-                imageFile = os.path.join(dirpath, f)
-                if not os.path.isfile(imageFile):
-                    print('Image file could not found: {}'.format(imageFile))
-                    return -2
-
-                samples.append([os.path.abspath(imageFile), 0])
-
-        if len(samples) == 0:
-            print('No data was found in the given CK+ path: {}' \
-                .format(args.ckplusPath))
-            return -4
+        for fileName, label in np.genfromtxt(fileName, delimiter=',', dtype='str',
+                                    skip_header=1):
+            fileName = '{}/{}'.format(args.samplesPath, fileName)
+            samples.append([fileName, int(label)])
 
         ##################################
         # Perform the extraction
@@ -426,8 +379,9 @@ class EmotionsDetector:
         # Execute the cross-validation
         ############################
 
-        clf = svm.SVC(kernel='linear', decision_function_shape='ovr',
-                                probability=True)
+        clf = svm.SVC(kernel='rbf', gamma=0.001, C=10,
+                          decision_function_shape='ovr',
+                          probability=True) #, class_weight='balanced')
 
         print('Performing KFold cross-validation with k = {}...'.format(args.k))
         scores = cross_val_score(clf, x, y, cv=args.k, n_jobs=-1)
@@ -487,6 +441,86 @@ class EmotionsDetector:
 
         return 0
 
+    #---------------------------------------------
+    def optimize(self, args):
+        """
+        Optimizes the EmotionsDetector model, trying to find the SVM parameters
+        that would yield better results.
+
+        Parameters
+        ----------
+        args: object
+            Object produced by the package argparse with the command line
+            arguments.
+
+        Returns
+        -------
+        errLevel: int
+            Error level of the execution (i.e. 0 indicates success; any other
+            value indicates specific failure conditions).
+        """
+
+        ############################
+        # Get the data
+        ############################
+
+        # Read the CSV file ignoring the header and the first column (which
+        # contains the file name of the image used for extracting the data in
+        # a row)
+        try:
+            data = np.genfromtxt(args.featuresFile, delimiter=',',
+                                    skip_header=1)
+            data = data[:, 1:]
+        except:
+            print('Could not read CSV file: {}'.format(args.featuresFile))
+            return -1
+
+        x = data[:, :-1]
+        y = np.squeeze(data[:, -1:])
+
+        ############################
+        # Execute the optimization
+        ############################
+
+        tunningParams = [
+                            {
+                             'kernel': ['linear'],
+                             'C': [1e-3, 1e-2, 1e-1, 1, 1e+1, 1e+2, 1e+3]
+                            },
+                            {
+                             'kernel': ['rbf'],
+                             'gamma': [1e-3, 1e-2, 1e-1, 1, 1e+1, 1e+2, 1e+3],
+                             'C': [1e-3, 1e-2, 1e-1, 1, 1e+1, 1e+2, 1e+3]
+                            },
+                        ]
+
+        scores = ['precision', 'recall']
+
+        for score in scores:
+            print('# Tuning hyper-parameters for {}\n'.format(score))
+
+            clf = GridSearchCV(svm.SVC(C=1), tunningParams, cv=5,
+                                scoring=format('{}_macro'.format(score)))
+            clf.fit(x, y)
+
+            print('Best parameters set found on development set:\n')
+            print(clf.best_params_)
+
+            print('\nGrid scores on development set:\n')
+            means = clf.cv_results_['mean_test_score']
+            stds = clf.cv_results_['std_test_score']
+            for mean, std, params in zip(means, stds, clf.cv_results_['params']):
+                print('{:.3f} (+/-{:.3f}) for {}'.format(mean, std * 2, params))
+
+            #print('\nDetailed classification report:\n')
+            #print('The model is trained on the full development set.')
+            #print('The scores are computed on the full evaluation set.\n')
+            #y_true, y_pred = y_test, clf.predict(X_test)
+            #print(classification_report(y_true, y_pred))
+            #print()
+
+        return 0
+
 #---------------------------------------------
 # namespace verification for running this script
 #---------------------------------------------
@@ -505,9 +539,9 @@ if __name__ == '__main__':
                                       'training the model from the sample '
                                       'images, and save them to a CSV file.')
 
-    extrParser.add_argument('ckplusPath',
-                            help='Path where to find the Extended Cohn-Kanade '
-                            ' dataset (CK+).')
+    extrParser.add_argument('samplesPath',
+                            help='Path where to find the image samples and the '
+                            'file "labels.csv" with the emotion labels.')
 
     extrParser.add_argument('featuresFile',
                             help='Name of the CSV file to save the extracted '
@@ -538,6 +572,16 @@ if __name__ == '__main__':
                           'to use in training.'
                          )
 
+    optParser = subparser.add_parser(name='optimize',
+                                      help='Tries to optimize the parameters '
+                                      'of the classifier to yield better '
+                                      'results.')
+
+    optParser.add_argument('featuresFile',
+                            help='Name of the CSV file with the features to use'
+                            ' in the optimization.'
+                           )
+
     args = parser.parse_args()
 
     if args.subParser is None:
@@ -550,5 +594,7 @@ if __name__ == '__main__':
         if args.k < 5:
             parser.error('value of option -k must be at least 5')
         sys.exit(model.crossValidate(args))
-    else:
+    elif args.subParser == 'trainModel':
         sys.exit(model.train(args))
+    else:
+        sys.exit(model.optimize(args))
