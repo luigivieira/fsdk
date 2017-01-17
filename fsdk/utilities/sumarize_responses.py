@@ -123,9 +123,6 @@ def createAnswers(srcFileName, tgtFileName, totalFrames):
                                   quoting=csv.QUOTE_MINIMAL)
 
     fps = 30
-    maxV = 2
-    minV = -2
-
     frames = []
     frustration = []
     involvement = []
@@ -134,10 +131,14 @@ def createAnswers(srcFileName, tgtFileName, totalFrames):
     for row in reader:
         secs = int(row.pop('Seconds'))
 
+        ft = int(row['Frustration']) + 2
+        iv = int(row['Involvement']) + 2
+        fn = int(row['Fun']) + 2
+
         frames.append(secs * fps)
-        frustration.append((int(row['Frustration']) - minV) / (maxV - minV))
-        involvement.append((int(row['Involvement']) - minV) / (maxV - minV))
-        fun.append((int(row['Fun']) - minV) / (maxV - minV))
+        frustration.append(ft)
+        involvement.append(iv)
+        fun.append(fn)
 
     file.close()
 
@@ -150,6 +151,10 @@ def createAnswers(srcFileName, tgtFileName, totalFrames):
     yfrust = np.interp(xf, frames, frustration)
     yinv = np.interp(xf, frames, involvement)
     yfun = np.interp(xf, frames, fun)
+
+    yfrust = [int(np.round(i)) for i in yfrust]
+    yinv = [int(np.round(i)) for i in yinv]
+    yfun = [int(np.round(i)) for i in yfun]
 
     #########################################################################
     # Save the interpolated answers in range [0, 1] to the target CSV file
