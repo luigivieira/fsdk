@@ -31,7 +31,6 @@ import csv
 import numpy as np
 from matplotlib import pyplot as plt
 import seaborn as sns
-import pandas as pd
 
 #---------------------------------------------
 def main(argv):
@@ -71,73 +70,42 @@ def main(argv):
 
             # Read the distance data
             fails = []
+            lastFrame = 0
             with open(fileName, 'r', newline='') as file:
                 reader = csv.reader(file, delimiter=',', quotechar='"',
                                             quoting=csv.QUOTE_MINIMAL)
 
                 next(reader, None) # Ignore header
                 for row in reader:
+                    lastFrame = int(row[0])
                     if not any([float(i) for i in row[1:]]):
-                        fails.append(int(row[0]))
+                        fails.append(int(row[0]) / 30 / 60)
 
             data[subject] = fails
 
     print('Plotting data...')
 
     subjects = []
-    frames = []
+    times = []
 
     for s, v in data.items():
-        for f in v:
-            subjects.append(s)
-            frames.append(f)
+        for t in v:
+            subjects.append(int(s))
+            times.append(t)
 
-    dt = pd.DataFrame({'frame':  frames,
-                       'subject': subjects})
+    ax = sns.stripplot(x=subjects, y=times, linewidth=1)
+    ax.set_xlabel('Subjects', fontsize=20)
+    ax.set_ylabel('Video Progress (in minutes)', fontsize=20)
+    ax.set_ylim([0, 10])
 
-    #sns.set_style('whiteg1rid')
-
-    ax = sns.stripplot(x='subject', y='frame', data=dt, linewidth=1)
-    ax.set_ylim([0, 18000])
+    ax.tick_params(axis='both', which='major', labelsize=15)
+    ax.tick_params(axis='both', which='minor', labelsize=10)
 
     mng = plt.get_current_fig_manager()
     mng.window.state('zoomed')
-    plt.suptitle('Overview of the Tracking Quality', fontsize=30)
+    plt.suptitle('Face Detection Failures', fontsize=30)
 
     plt.show()
-
-#---------------------------------------------
-def plotData(axis, frames, counts, rates):
-    """
-    Plot the data of a subject.
-
-    Parameters
-    ----------
-    axis: matplotlib.axis
-        Axis of the figure or subfigure where to plot the data.
-    frames: list
-        List of frame numbers of the subject.
-    counts: list
-        List of blink counts of the subject.
-    gradients: list
-        List of blink rates of the subject.
-    """
-
-    # Generate a time list for plotting
-    fps = 30
-    time = [(f / 60 / fps) for f in frames]
-
-    start = 0 # 5 * 60 * fps # Start the plots at 5 minutes
-
-    axis.set_xlim([0, 10])
-    #axis.set_ylim([-10, 10])
-    #axis.set_yticks([0, 0.5, 1])
-    axis.plot(time[start:], rates[start:], 'r', lw=1.5)
-    axis.plot(time[start:], counts[start:], 'b', lw=1.5)
-    #axis.plot(time[start:], involvement[start:], 'r', lw=1.5)
-    #for start, end in areas:
-    #    plt.axvspan(start / 30 / 60, end / 30 / 60, color='red', alpha=0.5)
-    #plt.axvspan(9750, frames[-1], color='blue', alpha=0.2)
 
 #---------------------------------------------
 # namespace verification for invoking main
