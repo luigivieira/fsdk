@@ -127,8 +127,8 @@ def main(argv):
         else:
             shared.get_shared_y_axes().join(shared, axis)
 
-        axis.plot(times, rates, lw=1.5, c='r')
-        axis.tick_params('y', colors='r')
+        axis.plot(times, rates, lw=1.5, c='g')
+        axis.tick_params('y', colors='g')
         if col < 6:
             axis.set_yticks([])
 
@@ -139,7 +139,7 @@ def main(argv):
                             rotation='vertical', fontsize=15)
 
 
-    fig.text(0.925, 0.5, 'Blink Rate (in Blinks per Minute)', va='center', color='r',
+    fig.text(0.925, 0.5, 'Blink Rate (in Blinks per Minute)', va='center', color='g',
                             rotation='vertical', fontsize=15)
 
     fig.text(0.5, 0.05, 'Video Progress (in Minutes)', ha='center', fontsize=15)
