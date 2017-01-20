@@ -48,7 +48,7 @@ def main(argv):
         Arguments received from the command line.
     """
 
-    annotationsPath = 'C:/Users/luigi/Dropbox/Doutorado/dataset/annotation'
+    annotationsPath = 'C:/Users/luigi/Dropbox/Doutorado/dataset/annotation-all'
     #annotationsPath = 'C:/temp/teste'
 
     print('Reading data...')
@@ -139,7 +139,7 @@ def main(argv):
                             rotation='vertical', fontsize=15)
 
 
-    fig.text(0.92, 0.5, 'Blink Rate (in Blinks per Minute)', va='center', color='r',
+    fig.text(0.925, 0.5, 'Blink Rate (in Blinks per Minute)', va='center', color='r',
                             rotation='vertical', fontsize=15)
 
     fig.text(0.5, 0.05, 'Video Progress (in Minutes)', ha='center', fontsize=15)
