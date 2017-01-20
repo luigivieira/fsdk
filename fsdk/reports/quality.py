@@ -63,7 +63,6 @@ def main(argv):
                 continue
 
             subject = parts[0].split('_')[1]
-            data[subject] = {}
 
             fileName = os.path.join(dirpath, f)
             print('\tfile {}...'.format(fileName))

@@ -28,7 +28,6 @@
 import sys
 import os
 import csv
-import argparse
 import numpy as np
 from matplotlib import pyplot as plt
 import seaborn as sns
@@ -49,20 +48,13 @@ def main(argv):
         Arguments received from the command line.
     """
 
-    # Parse the command line
-    args = parseCommandLine(argv)
-
-    if not os.path.isdir(args.annotationsPath):
-        print('Path {} does not exist'.format(args.annotationsPath))
-        return -1
+    annotationsPath = 'C:/Users/luigi/Dropbox/Doutorado/dataset/annotation'
+    #annotationsPath = 'C:/temp/teste'
 
     print('Reading data...')
-    allFrames = []
-    allCounts = []
-    allRates = []
-    allSubjects = []
+    data = {}
 
-    for dirpath, _, filenames in os.walk(args.annotationsPath):
+    for dirpath, _, filenames in os.walk(annotationsPath):
         for f in filenames:
 
             name = os.path.splitext(f)[0]
@@ -70,6 +62,8 @@ def main(argv):
 
             if len(parts) != 2 or parts[1] != 'blinks':
                 continue
+
+            subject = int(parts[0].split('_')[1])
 
             fileName = os.path.join(dirpath, f)
             print('\tfile {}...'.format(fileName))
@@ -79,101 +73,79 @@ def main(argv):
                 reader = csv.DictReader(file, delimiter=',', quotechar='"',
                                             quoting=csv.QUOTE_MINIMAL)
 
-                frames = []
+                times = []
                 counts = []
                 rates = []
                 for row in reader:
-                    frames.append(int(row['frame']))
+                    times.append(int(row['frame']) / 30 / 60)
                     counts.append(float(row['blink.count']))
                     rates.append(float(row['blink.rate']))
 
-                allFrames.append(frames)
-                allCounts.append(counts)
-                allRates.append(rates)
-                allSubjects.append(parts[0].split('_')[1])
-
-    allFrames = np.array(allFrames)
-    allCounts = np.array(allCounts)
-    allRates = np.array(allRates)
-    allSubjects = np.array(allSubjects)
+                data[subject] = {'times': times, 'counts': counts,
+                                 'rates': rates}
 
     print('Plotting data...')
+
+    #sns.set_style('dark')
+
     fig, axes = plt.subplots(5, 7, sharex = True, sharey = True)
-    size = len(allFrames)
-    for i in range(size):
+    #fig, axes = plt.subplots(2, 1, sharex=True)
+
+    subjects = list(data.keys())
+    values = list(data.values())
+
+    shared = None
+
+    for i, subject in enumerate(subjects):
         row = i // 7
         col = i % 7
         axis = axes[row, col]
-        plotData(axis, allFrames[i], allCounts[i], allRates[i])
-        axis.set_title('Subject {}'.format(allSubjects[i]))
+
+        times = values[i]['times']
+        counts = values[i]['counts']
+        rates = values[i]['rates']
+
+        svCnt = 0
+        svRate = 0
+        for j in range(len(times)):
+            if counts[j] == 0:
+                counts[j] = svCnt
+            if rates[j] == 0:
+                rates[j] = svRate
+            svCnt = counts[j]
+            svRate = rates[j]
+
+        axis.set_title(subject)
+        axis.plot(times, counts, lw=1.5, c='b')
+        axis.tick_params('y', colors='b')
+        axis.set_xlim([0, 10])
+
+        axis = axis.twinx()
+        axis.set_xlim([0, 10])
+        if shared is None:
+            shared = axis
+        else:
+            shared.get_shared_y_axes().join(shared, axis)
+
+        axis.plot(times, rates, lw=1.5, c='r')
+        axis.tick_params('y', colors='r')
+        if col < 6:
+            axis.set_yticks([])
 
     mng = plt.get_current_fig_manager()
     mng.window.state('zoomed')
-    plt.suptitle('Blink count and rate', fontsize=30)
+
+    fig.text(0.09, 0.5, 'Accumulated Blink Count', va='center', color='b',
+                            rotation='vertical', fontsize=15)
+
+
+    fig.text(0.92, 0.5, 'Blink Rate (in Blinks per Minute)', va='center', color='r',
+                            rotation='vertical', fontsize=15)
+
+    fig.text(0.5, 0.05, 'Video Progress (in Minutes)', ha='center', fontsize=15)
+
+    plt.suptitle('Blink Detection', fontsize=30)
     plt.show()
-
-#---------------------------------------------
-def plotData(axis, frames, counts, rates):
-    """
-    Plot the data of a subject.
-
-    Parameters
-    ----------
-    axis: matplotlib.axis
-        Axis of the figure or subfigure where to plot the data.
-    frames: list
-        List of frame numbers of the subject.
-    counts: list
-        List of blink counts of the subject.
-    gradients: list
-        List of blink rates of the subject.
-    """
-
-    # Generate a time list for plotting
-    fps = 30
-    time = [(f / 60 / fps) for f in frames]
-
-    start = 0 # 5 * 60 * fps # Start the plots at 5 minutes
-
-    axis.set_xlim([0, 10])
-    #axis.set_ylim([-10, 10])
-    #axis.set_yticks([0, 0.5, 1])
-    axis.plot(time[start:], rates[start:], 'r', lw=1.5)
-    axis.plot(time[start:], counts[start:], 'b', lw=1.5)
-    #axis.plot(time[start:], involvement[start:], 'r', lw=1.5)
-    #for start, end in areas:
-    #    plt.axvspan(start / 30 / 60, end / 30 / 60, color='red', alpha=0.5)
-    #plt.axvspan(9750, frames[-1], color='blue', alpha=0.2)
-
-#---------------------------------------------
-def parseCommandLine(argv):
-    """
-    Parse the command line of this utility application.
-
-    This function uses the argparse package to handle the command line
-    arguments. In case of command line errors, the application will be
-    automatically terminated.
-
-    Parameters
-    ------
-    argv: list of str
-        Arguments received from the command line.
-
-    Returns
-    ------
-    object
-        Object with the parsed arguments as attributes (refer to the
-        documentation of the argparse package for details)
-
-    """
-    parser = argparse.ArgumentParser(description='Display a graphical report '
-                                     'on the blink count and rate.')
-
-    parser.add_argument('annotationsPath',
-                        help='Path where the annotation files are located.'
-                       )
-
-    return parser.parse_args()
 
 #---------------------------------------------
 # namespace verification for invoking main
