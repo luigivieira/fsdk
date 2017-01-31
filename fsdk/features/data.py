@@ -132,44 +132,24 @@ class FaceData:
     corner, left mouth corner and right mouth corner).
     """
 
-    _cameraResolution = [1280, 720]
-    """
-    Resolution in which the camera used captured the facial images. This value
-    is used to estimate the distance that the face is located from the camera.
-    """
-
-    _focalLength = _cameraResolution[0]
-    """
-    Focal length of the camera. Estimated from the width of the images captured
-    from the camera.
-    """
-
-    _opticalCenter = (_cameraResolution[0] / 2,
-                      _cameraResolution[1] / 2)
-    """
-    Optical center of the camera. Estimated from the size of the images captured
-    from the camera.
-    """
-
     _cameraMatrix = np.array([
-                                [_focalLength, 0, _opticalCenter[0]],
-                                [0, _focalLength, _opticalCenter[1]],
+                                [1803.9267750166157, 0, 635.5872977618336],
+                                [0, 1810.6098251188403, 364.23804387388947],
                                 [0, 0, 1]
                              ], dtype = 'float')
     """
-    Matrix of the camera fixed parameters. These values would have to be
-    estimated by performing a calibration of the camera. But since we are only
-    interested in the rate of change of the distance (distance gradients)
-    instead of an accurate distance measurement, we simply estimated these
-    values from the resolution of the images obtained.
+    Matrix of the camera intrinsic parameters. These values were obtained with
+    the calibration of the camera with 11 images of a 9x7 checked-board pattern.
     """
 
-    _distCoeffs = np.zeros((4, 1))
+    _distCoeffs = np.array([
+                            [0.08533926523403776], [1.8619398586203595],
+                            [0.00841143883305706], [0.006323580482943552]
+                           ])
     """
-    Vector of distortion coefficients of the camera. Since we are interested in
-    the rate of change of the distance (distance gradients) instead of an
-    accurate distance measurement, for simplicity it is assumed that the camera
-    has no distortion.
+    Vector of distortion coefficients of the camera. These values were obtained
+    with the calibration of the camera with 11 images of a 9x7 checked-board
+    pattern.
     """
 
     def __init__(self, region = (0, 0, 0, 0),
@@ -335,16 +315,16 @@ class FaceData:
         if drawRegion:
             cv2.rectangle(image, (self.region[0], self.region[1]),
                                  (self.region[2], self.region[3]),
-                                 (255, 0, 0), 2)
+                                 (0, 0, 255), 2)
 
         # Draw the positions of landmarks
-        color = (0, 0, 255)
+        color = (0, 255, 255)
         for i in range(68):
             cv2.circle(image, tuple(self.landmarks[i]), 1, color, 2)
 
         # Draw the face model if requested
         if drawFaceModel:
-            c = (255, 0, 255)
+            c = (0, 255, 255)
             p = np.array(self.landmarks)
 
             cv2.polylines(image, [p[FaceData._jawLine]], False, c, 2)
@@ -433,21 +413,21 @@ class FaceData:
                                        flags=cv2.SOLVEPNP_ITERATIVE)
 
         # The estimated distance is the absolute value on the Z axis. That value
-        # is divided by 50 to approximate the real value (due to the arbitrary
-        # choice of the model being scaled by ~ 50x).
-        d = abs(trans[2][0] / 50)
+        # is divided by 100 to approximate to the real value in centimeters (due
+        # to the face model being scaled by ~ 10x in millimeters).
+        d = abs(trans[2][0] / 100)
 
         # Error verification. I don't know exactly why, but for a few frames in
         # *one or two* of the test videos the value returned by solvePnP is
-        # totally bizarre (too big or too low). Perhaps this would be fixed with
-        # a proper calibration of the camera. But at this time, it is easier
-        # to not have a distance calculated in those very rare scenarios.
-        # The distance update code that relies on this calculation can then use
-        # the same value from a previous frame or interpolate it.
+        # totally bizarre (too big or too low). Perhaps this has to do with the
+        # calibration of the camera. But at this time, it is easier to not have
+        # a distance calculated in those very rare scenarios. The value used in
+        # this cases is 0; the distance update code that relies on this calculus
+        # ignores 0s by using the same value from a previous frame.
         #
         # The expected range of distance is between 20 and 60 cm, so "extreme"
         # values (bellow 10 and above 100) are considered errors.
-        if d <= 10 or d >= 100:
+        if d < 10 or d > 100:
             self.distance = 0.0
         else:
             self.distance = d
