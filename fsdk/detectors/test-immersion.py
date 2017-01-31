@@ -149,7 +149,7 @@ def main():
     data = readData(annotationPath)
 
     # Create the Model
-    clf = StructuredPerceptron(random_state=2, max_iter=100)
+    clf = StructuredPerceptron(random_state=2)
 
     ############################
     # Leave-One-Out validation
