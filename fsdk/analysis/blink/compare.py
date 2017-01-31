@@ -29,6 +29,7 @@ import sys
 import numpy as np
 from matplotlib import pyplot as plt
 import seaborn as sns
+import pandas as pd
 #sns.set_style("whitegrid")
 
 #---------------------------------------------
@@ -41,7 +42,6 @@ def main(argv):
     argv: list of str
         Arguments received from the command line.
     """
-
     annotation = np.genfromtxt('annotation.csv', dtype='int',
                                     delimiter=',', skip_header=1)
 
@@ -50,6 +50,7 @@ def main(argv):
 
     annotation = np.array(annotation, dtype='float')
     detected = np.array(detected, dtype='float')
+    print(len([i for i in detected if i[1] == 1]))
 
     b = annotation[:, 1].astype(bool)
     ann = annotation[b]
@@ -84,6 +85,9 @@ def main(argv):
     fpo = np.delete(fpo, iFpo, 0)
     fne = np.delete(fne, iFne, 0)
 
+    print(len(fpo))
+    print(len(fne))
+
 
     s = [50 for i in range(5000)]
 
@@ -103,6 +107,7 @@ def main(argv):
     plt.xticks([i for i in range(0, 5001, 1000)])
     plt.ylim([0, 0.6])
     plt.xlabel('Frame number', fontsize=15)
+    plt.ylabel('Blink occurrences', fontsize=15)
     plt.yticks([])
     plt.legend(handles=[ann, det, fne, fpo], fontsize=10)
 
