@@ -133,18 +133,18 @@ class FaceData:
     """
 
     _cameraMatrix = np.array([
-                                [1803.9267750166157, 0, 635.5872977618336],
-                                [0, 1810.6098251188403, 364.23804387388947],
+                                [1470.178963530401, 0, 654.91904910619],
+                                [0, 1476.4198888732042, 364.0557064295808],
                                 [0, 0, 1]
                              ], dtype = 'float')
     """
     Matrix of the camera intrinsic parameters. These values were obtained with
-    the calibration of the camera with 11 images of a 9x7 checked-board pattern.
+    the calibration of the camera with 24 images of a 9x7 checked-board pattern.
     """
 
     _distCoeffs = np.array([
-                            [0.08533926523403776], [1.8619398586203595],
-                            [0.00841143883305706], [0.006323580482943552]
+                            [0.004101556323186707], [0.22084309786735434],
+                            [0.0009548613012245966], [0.0022172138428918665]
                            ])
     """
     Vector of distortion coefficients of the camera. These values were obtained

@@ -26,12 +26,10 @@
 # SOFTWARE.
 
 import sys
-import os
-import csv
 import numpy as np
 from matplotlib import pyplot as plt
 import seaborn as sns
-from collections import OrderedDict
+import pandas as pd
 
 #---------------------------------------------
 def main(argv):
@@ -47,67 +45,52 @@ def main(argv):
     argv: list of str
         Arguments received from the command line.
     """
+    data = pd.read_csv('fails.csv') # This file is created from script faces.py
 
-    annotationsPath = 'C:/Users/luigi/Dropbox/Doutorado/dataset/annotation-all'
-    #annotationsPath = 'C:/temp/teste'
+    fig, ax = plt.subplots()
 
-    print('Reading data...')
-    data = OrderedDict()
-    tot = OrderedDict()
+    sns.barplot(x='# subject', y='fails (percent)', data=data)
+    ax.set_ylim((0, 16))
+    ax.set_yticks([i for i in range(1, 17)])
+    ax.set_yticklabels(['{}%'.format(i) for i in range(1, 17)])
 
-    for dirpath, _, filenames in os.walk(annotationsPath):
-        for f in filenames:
-
-            name = os.path.splitext(f)[0]
-            parts = name.split('-')
-
-            if len(parts) != 2 or parts[1] != 'face':
-                continue
-
-            subject = parts[0].split('_')[1]
-
-            fileName = os.path.join(dirpath, f)
-            print('\tfile {}...'.format(fileName))
-
-            # Read the distance data
-            fails = []
-            lastFrame = 0
-            with open(fileName, 'r', newline='') as file:
-                reader = csv.reader(file, delimiter=',', quotechar='"',
-                                            quoting=csv.QUOTE_MINIMAL)
-
-                next(reader, None) # Ignore header
-                for row in reader:
-                    lastFrame = int(row[0])
-                    if not any([float(i) for i in row[1:]]):
-                        fails.append(int(row[0]))
-
-            tot[subject] = lastFrame
-            data[subject] = fails
-
-    print('Plotting data...')
-
-    subjects = []
-    times = []
-
-    fails = []
-    for s, v in data.items():
-
-        fail = len(v) / tot[s] * 100
-        fails.append([int(s), fail])
-        print('Subject: {} Fails: {:.2f}%'.format(s, fail))
-
-        for f in v:
-            subjects.append(int(s))
-            times.append(f / 30 / 60)
-
-    ax = sns.stripplot(x=subjects, y=times, linewidth=1)
     ax.set_xlabel('Subjects', fontsize=15)
-    ax.set_ylabel('Video Progress (in Minutes)', fontsize=15)
-    ax.set_ylim([0, 10])
+    ax.set_ylabel('Detection Failures (Percent)', fontsize=15)
 
-    fails = np.array(fails)
-    np.savetxt('fails.csv', fails, fmt=('%d', '%.5f'), delimiter=',', header='subject,fails (percent)')
+    m = data['fails (percent)']
+
+    q1 = np.percentile(m, 25)
+    q2 = np.percentile(m, 50)
+    q3 = np.percentile(m, 75)
+
+    iqr = q3 - q1
+    print('Q1: {}'.format(q1))
+    print('Q3: {}'.format(q3))
+    print('IQR: {}'.format(iqr))
+    print('lower fence: {}'.format(q1 - 1.5 * iqr))
+    print('upper fence: {}'.format(q3 + 1.5 * iqr))
+
+    x = [-1] + [i for i in range(len(data['# subject'].tolist())+1)]
+    y1 = [q1 for _ in range(len(x))]
+    y2 = [q2 for _ in range(len(x))]
+    y3 = [q3 for _ in range(len(x))]
+
+    fence = q3 + 1.5 * iqr
+    yf = [fence for _ in range(len(x))]
+
+    ax.fill_between(x, y1, y3, color='b', alpha=0.2, zorder=2,
+                    label='Interquartile Range (Q1: {:.2f}%, Q3: {:.2f}%)'.format(q1, q3))
+    ax.plot(x, y2, 'b', zorder=2, label='Median ({:.2f}%)'.format(q2))
+    ax.plot(x, yf, 'r', zorder=2, label='Upper Fence ({:.2f}%)'.format(fence))
+
+    ax.legend(prop={'size':15})
+
+    #lg = ax.legend([l0, l1, l2], labels=[,
+    #                             ,
+    #                             ],
+    #                        loc='top right', borderaxespad=0.1)
+    #lg.legendHandles[1].set_color('b')
+    #lg.legendHandles[2].set_color('r')
 
     mng = plt.get_current_fig_manager()
     mng.window.state('zoomed')

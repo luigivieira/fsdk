@@ -73,7 +73,7 @@ def main(argv):
     _, face = det.detect(faceImage)
 
     model = np.ones(faceImage.shape, faceImage.dtype) * 255
-    face.draw(model, False)
+    face.draw(model, False, False)
 
     r = face.region
     model = model[r[1]:r[3]+1, r[0]:r[2]+1]

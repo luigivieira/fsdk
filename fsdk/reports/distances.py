@@ -75,12 +75,15 @@ def main(argv):
                                             quoting=csv.QUOTE_MINIMAL)
 
                 times = []
+                distances = []
                 gradients = []
                 for row in reader:
                     times.append(int(row['frame']) / 30 / 60)
+                    distances.append(float(row['face.distance']))
                     gradients.append(float(row['face.gradient']))
 
-                data[subject] = {'times': times, 'gradients': gradients}
+                data[subject] = {'times': times, 'distances': distances,
+                                 'gradients': gradients}
 
     print('Plotting data...')
 
@@ -97,6 +100,7 @@ def main(argv):
         axis = axes[row, col]
 
         times = values[i]['times']
+        distances = values[i]['distances']
         gradients = values[i]['gradients']
 
         svGrad = 0
@@ -106,7 +110,7 @@ def main(argv):
             svGrad = gradients[j]
 
         axis.set_title(subject)
-        axis.plot(times, gradients, lw=1.5, c='b')
+        axis.plot(times, gradients, lw=1.5)
         axis.set_xlim([0, 10])
 
     mng = plt.get_current_fig_manager()
@@ -116,8 +120,6 @@ def main(argv):
                             va='center', rotation='vertical', fontsize=15)
 
     fig.text(0.5, 0.05, 'Video Progress (in Minutes)', ha='center', fontsize=15)
-
-    plt.suptitle('Distance Estimation', fontsize=30)
     plt.show()
 
 #---------------------------------------------

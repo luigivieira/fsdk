@@ -144,7 +144,6 @@ def main(argv):
 
     fig.text(0.5, 0.05, 'Video Progress (in Minutes)', ha='center', fontsize=15)
 
-    plt.suptitle('Blink Detection', fontsize=30)
     plt.show()
 
 #---------------------------------------------

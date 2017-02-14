@@ -35,33 +35,6 @@ def main():
     datasetPath = 'C:/Users/luigi/Dropbox/Doutorado/dataset'
     data = pd.read_csv('{}/subjects.csv'.format(datasetPath))
 
-    print(data['Age'].min())
-    print(data['Age'].max())
-
-    gf = pd.read_csv('{}/glasses.csv'.format(datasetPath))
-    data['Facial Hair'] = gf['Facial Hair']
-
-    data = data[data['Sex'] == 'Male']
-    x = data.groupby('Facial Hair').count()
-    print(x)
-
-    return 0
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    data = pd.read_csv('{}/subjects.csv'.format(datasetPath))
-
     print(data['Sex'].value_counts())
     print(data['Play Games'].value_counts())
 

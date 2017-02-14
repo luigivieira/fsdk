@@ -409,7 +409,7 @@ def main(argv):
 
         ret, img = video.read()
         if ret:
-            frame = img
+            frame = img.copy()
         else:
             paused = True
 
@@ -431,6 +431,18 @@ def main(argv):
             break
         elif key == ord('p') or key == ord('P'):
             paused = not paused
+        elif key == ord('c') or key == ord('C'):
+            cv2.imwrite('frame.png', img)
+            cv2.imwrite('drawn.png', frame)
+            face = data._faces[frameNum]
+            if any(i != 0 for i in face.region):
+                img,_ = face.crop(img)
+                cv2.imwrite('cropped.png', img)
+            else:
+                try:
+                    os.remove('cropped.png')
+                except:
+                    pass
         elif key == ord('r') or key == ord('R'):
             frameNum = 0
             video.set(cv2.CAP_PROP_POS_FRAMES, frameNum)
@@ -444,18 +456,19 @@ def main(argv):
             if frameNum >= frameCount:
                 frameNum = frameCount - 1
         elif key == 2162688: # Pageup key
-            frameNum -= (fps * 60)
+            frameNum -= (fps * 10)
             if frameNum < 0:
                 frameNum = 0
             video.set(cv2.CAP_PROP_POS_FRAMES, frameNum)
         elif key == 2228224: # Pagedown key
-            frameNum += (fps * 60)
+            frameNum += (fps * 10)
             if frameNum >= frameCount:
                 frameNum = frameCount - 1
             video.set(cv2.CAP_PROP_POS_FRAMES, frameNum)
         elif key == 7340032: # F1
             showHelp(args.video, frame.shape)
-        elif not paused:
+
+        if not paused:
             frameNum += 1
 
     video.release()
@@ -551,7 +564,7 @@ def showHelp(windowTitle, shape):
                 '[p]: toggles paused/playing the video.',
                 '[r]: restarts the video playback.',
                 '[left/right arrow]: displays the previous/next frame (only when paused).',
-                '[page-up/down]: rewinds/fast forwards the video by 1 minute.',
+                '[page-up/down]: rewinds/fast forwards the video by 10 seconds.',
                 ' ',
                 ' ',
                 'Press any key to close this window...'
