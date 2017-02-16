@@ -34,7 +34,7 @@ import pandas as pd
 
 from seqlearn.perceptron import StructuredPerceptron
 from seqlearn.evaluation import SequenceKFold
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score
 from sklearn.externals import joblib
 
 from sklearn.preprocessing import MinMaxScaler
@@ -46,8 +46,7 @@ def readData(annotationPath):
     ##################################
     print('Reading data...')
 
-    subjects = [1, 2, 6, 7, 14, 15, 17, 18, 20, 21, 23, 25, 26, 30, 31, 34,
-                37, 38, 39, 40, 41]
+    subjects = [1, 2, 4, 6, 7, 14, 15, 17, 18, 20, 21, 22, 23, 25, 26, 27, 30, 32, 33, 34, 37, 38, 39, 40, 41]
 
     data = OrderedDict()
     for subject in subjects:
@@ -103,8 +102,12 @@ def loo(clf, data, featTitles, labelTitle):
     subjects = data.keys()
     tests = [(s, [o for o in subjects if o != s]) for s in subjects]
 
-    # Perform the tests
-    scores = []
+    # Perform the tests and collect the metrics
+    subjects = []
+    accuracy = []
+    precision = []
+    recall = []
+
     for test_subject, train_subjects in tests:
 
         # Prepare the train data
@@ -135,10 +138,22 @@ def loo(clf, data, featTitles, labelTitle):
         xTest = normalizer.fit_transform(xTest)
         yPred = clf.predict(xTest, lTest)
 
-        # Add the score to the return list
-        scores.append(accuracy_score(yTest, yPred))
+        # Get the metrics
+        acc = accuracy_score(yTest, yPred)
+        prec = precision_score(yTest, yPred, average='weighted')
+        rec = recall_score(yTest, yPred, average='weighted')
 
-    return np.array(scores)
+        # Save the metrics data for the subject
+        subjects.append(test_subject)
+        accuracy.append(acc)
+        precision.append(prec)
+        recall.append(rec)
+
+    ret = pd.DataFrame({'accuracy': accuracy, 'precision': precision,
+                        'recall': recall}, index=subjects)
+    ret.index.name = 'Subjects'
+
+    return ret
 
 #---------------------------------------------
 def main():
@@ -159,37 +174,17 @@ def main():
                ['Score for subject {}'.format(s) for s in data.keys()] + \
                ['Mean Score', 'Confidence Interval']]
 
-    print('Cross-validating...')
+    print('Cross-validating (gradient + rate)...')
+    metrics = loo(clf, data, ['gradient', 'rate'], 'immersion')
+    metrics.to_csv('immersion-metrics (gradient+rate).csv', sep=',')
 
-    scores = loo(clf, data, ['gradient', 'rate'], 'immersion')
-    meanScore = scores.mean()
-    confidence = scores.std() * 2
-    print('LOO Cross-Validation result (gradient + rate): ', scores)
-    print('Average: {:3f} (+- {:3f})'.format(meanScore, confidence))
-    results.append(['gradient + rate'] + [str(i) for i in scores] + \
-                   [str(meanScore), str(confidence)])
+    print('Cross-validating (gradient)...')
+    metrics = loo(clf, data, ['gradient'], 'immersion')
+    metrics.to_csv('immersion-metrics (gradient).csv', sep=',')
 
-    print('\n')
-
-    scores = loo(clf, data, ['gradient'], 'immersion')
-    meanScore = scores.mean()
-    confidence = scores.std() * 2
-    print('LOO Cross-Validation result (gradient): ', scores)
-    print('Average: {:3f} (+- {:3f})'.format(meanScore, confidence))
-    results.append(['gradient'] + [str(i) for i in scores] + \
-                   [meanScore, confidence])
-
-    print('\n')
-
-    scores = loo(clf, data, ['rate'], 'immersion')
-    meanScore = scores.mean()
-    confidence = scores.std() * 2
-    print('LOO Cross-Validation result (rate): ', scores)
-    print('Average: {:3f} (+- {:3f})'.format(meanScore, confidence))
-    results.append(['rate'] + [str(i) for i in scores] + \
-                   [str(meanScore), str(confidence)])
-
-    np.savetxt('test-immersion.csv', results, delimiter=',', fmt='%s')
+    print('Cross-validating (rate)...')
+    metrics = loo(clf, data, ['rate'], 'immersion')
+    metrics.to_csv('immersion-metrics (rate).csv', sep=',')
 
     return 0
 
