@@ -103,23 +103,29 @@ def main(argv):
         distances = values[i]['distances']
         gradients = values[i]['gradients']
 
+        svDist = 0
         svGrad = 0
         for j in range(len(times)):
+            if distances[j] == 0:
+                distances[j] = svDist
+            svDist = distances[j]
             if gradients[j] == 0:
                 gradients[j] = svGrad
             svGrad = gradients[j]
 
         axis.set_title(subject)
-        axis.plot(times, gradients, lw=1.5)
+        axis.plot(times, distances, lw=1.5)
         axis.set_xlim([0, 10])
+        axis.xaxis.grid(False)
 
     mng = plt.get_current_fig_manager()
     mng.window.state('zoomed')
 
-    fig.text(0.09, 0.5, 'Gradient of the Face Distance (in Centimeters)',
+    #fig.text(0.1, 0.5, 'Gradient of the Face Distance (in Centimeters)',
+    fig.text(0.1, 0.5, 'Face Distance (in Centimeters)',
                             va='center', rotation='vertical', fontsize=15)
 
-    fig.text(0.5, 0.05, 'Video Progress (in Minutes)', ha='center', fontsize=15)
+    fig.text(0.5, 0.055, 'Video Progress (in Minutes)', ha='center', fontsize=15)
     plt.show()
 
 #---------------------------------------------

@@ -65,17 +65,20 @@ def main():
     sns.countplot(x='Game Played', hue='Sex', data=data, ax=ax, palette=pal)
     ax.set_xlabel('Game Played', fontsize=15)
     ax.set_ylabel('Number of Samples', fontsize=15)
+    ax.legend_.set_title('')
 
     ax = axes[1][0]
     sns.countplot(x='Play Games', hue='Sex', data=data, ax=ax, palette=pal)
     ax.set_xlabel('Usually Play Games', fontsize=15)
     ax.set_ylabel('Number of Samples', fontsize=15)
+    ax.legend_.set_title('')
 
     ax = axes[1][1]
     sns.countplot(x='Hours Per Week Playing Games', hue='Sex', data=data,
                     ax=ax, palette=pal)
     ax.set_xlabel('Playtime per Week (in hours)', fontsize=15)
     ax.set_ylabel('Number of Samples', fontsize=15)
+    ax.legend_.set_title('')
 
     ax = axes[1][2]
     sns.countplot(x='Played Game Before', hue='Sex', data=data,
@@ -85,15 +88,12 @@ def main():
     ax.set_xlim([-0.5, 1.5])
     ax.set_xticks([0, 1])
     ax.set_xticklabels(['No', 'Yes'])
+    ax.legend_.set_title('')
 
     mng = plt.get_current_fig_manager()
     mng.window.state('zoomed')
 
-    plt.suptitle('Overview of the Data Collected', fontsize=30)
     plt.show()
-
-
-
 
 
 #---------------------------------------------

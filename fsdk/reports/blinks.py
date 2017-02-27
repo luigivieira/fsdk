@@ -95,6 +95,7 @@ def main(argv):
     values = list(data.values())
 
     shared = None
+    pal = sns.color_palette('colorblind')
 
     for i, subject in enumerate(subjects):
         row = i // 7
@@ -116,9 +117,10 @@ def main(argv):
             svRate = rates[j]
 
         axis.set_title(subject)
-        axis.plot(times, counts, lw=1.5, c='b')
-        axis.tick_params('y', colors='b')
+        axis.plot(times, counts, lw=1.5, c=pal[0])
+        axis.tick_params('y', colors=pal[0])
         axis.set_xlim([0, 10])
+        axis.xaxis.grid(False)
 
         axis = axis.twinx()
         axis.set_xlim([0, 10])
@@ -127,19 +129,19 @@ def main(argv):
         else:
             shared.get_shared_y_axes().join(shared, axis)
 
-        axis.plot(times, rates, lw=1.5, c='g')
-        axis.tick_params('y', colors='g')
+        axis.plot(times, rates, lw=1.5, c=pal[1])
+        axis.tick_params('y', colors=pal[1])
         if col < 6:
             axis.set_yticks([])
 
     mng = plt.get_current_fig_manager()
     mng.window.state('zoomed')
 
-    fig.text(0.09, 0.5, 'Accumulated Blink Count', va='center', color='b',
+    fig.text(0.09, 0.5, 'Accumulated Blink Count', va='center', color=pal[0],
                             rotation='vertical', fontsize=15)
 
 
-    fig.text(0.925, 0.5, 'Blink Rate (in Blinks per Minute)', va='center', color='g',
+    fig.text(0.925, 0.5, 'Blink Rate (in Blinks per Minute)', va='center', color=pal[1],
                             rotation='vertical', fontsize=15)
 
     fig.text(0.5, 0.05, 'Video Progress (in Minutes)', ha='center', fontsize=15)
